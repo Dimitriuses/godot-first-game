@@ -9,7 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://b7d2tm7gwu1hw" path="res://assets/dice/dice_6_sprites.png" id="6_4kp1s"]
 [ext_resource type="Texture2D" uid="uid://v4xp43pidc7d" path="res://assets/dice/dice_idle0_sprites.png" id="7_nkpnt"]
 [ext_resource type="Texture2D" uid="uid://bl5rvtp25ldvg" path="res://assets/dice/dice_idle1_sprites.png" id="8_mvkvt"]
-[ext_resource type="Texture2D" uid="uid://c7l124qiy2pfv" path="res://assets/kenney_boardgame-pack/PNG/Chips/chipRedWhite.png" id="10_pgf55"]
+[ext_resource type="Texture2D" uid="uid://c7l124qiy2pfv" path="res://assets/kenney-boardgame/chip-red-white.png" id="10_pgf55"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_dicg2"]
 bounce = 0.6
@@ -4201,7 +4201,7 @@ animations = [{
 "texture": SubResource("AtlasTexture_gj3bk")
 }],
 "loop": true,
-"name": &"ide0",
+"name": &"idle0",
 "speed": 30.0
 }, {
 "frames": [{
@@ -4296,7 +4296,7 @@ animations = [{
 "texture": SubResource("AtlasTexture_0lwtn")
 }],
 "loop": true,
-"name": &"ide1",
+"name": &"idle1",
 "speed": 30.0
 }]
 

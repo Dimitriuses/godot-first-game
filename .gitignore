@@ -1,3 +1,11 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Exported builds (see export_presets.cfg)
+builds/
+
+# .NET build artefacts
+bin/
+obj/
+*.user
