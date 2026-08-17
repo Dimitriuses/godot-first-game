@@ -57,30 +57,35 @@ The options, none of them cheap:
 - Publish a downloadable Windows build under Releases instead — much less valuable than a
   link, but it works today and the export preset is already configured.
 
-## 6. Regenerate the die animation from scratch
+## 6. Regenerate the die animation from scratch — ✅ done, August 2026
 
-The die animation is the reason this toy is worth looking at, and it is also the one asset
-the project does not have clean rights to — it was reworked from a custom Telegram sticker
-pack of unknown authorship (see [docs/ASSETS.md](docs/ASSETS.md)). Both problems have the
-same solution: **redraw it.**
+The die animation was the one asset the project did not have clean rights to. It has been
+re-rendered from **Blend Swap blend #82440 (CC0)** in Blender, and the frames are now
+covered by this repository's MIT licence. Full method in [docs/ASSETS.md](docs/ASSETS.md).
 
-Not a substitution. Dropping in a flat CC0 dice sprite would settle the licensing and throw
-away the visual appeal in the same move. What the replacement needs to keep:
+It was a re-render, not a substitution — dropping in a flat CC0 dice sprite would have
+settled the licensing and thrown away the visual appeal in the same move. What it kept:
 
-- a **3D look** — the die reads as a solid cube tumbling, not a flat icon spinning;
-- **artistically exaggerated rotation**, faster and more emphatic than real physics would
-  give, because that is what makes the throw feel good;
-- the existing structure: six landing animations (`1`–`6`) plus two idle/spin loops
-  (`idle0`, `idle1`), so nothing in `Dice.cs` has to change.
+- a **3D look** — a real cube tumbling in 3D rather than a flat icon spinning;
+- **artistically exaggerated rotation**, decaying over 66 frames into a damped settle,
+  with motion blur accumulated from up to 20 renders per frame so the fast part smears
+  instead of strobing;
+- the existing structure exactly — six landing animations (`1`–`6`) of 91 frames plus two
+  30-frame idle loops (`idle0`, `idle1`), all at 30 fps, so **`Dice.cs` did not change.**
 
-Likely route is to render the cube in 3D, export a frame sequence per face, and pack it to
-spritesheets. Worth fixing the resolution while doing it: the current frames are 5120×5120
-sheets of 512 px cells drawn on screen at 128 px — four times larger than needed, and
-18.6 MB for one die.
+The resolution problem went with it: 128 px cells drawn at 1:1 instead of 512 px cells drawn
+at 128 px. **3.9 MB instead of 18.6 MB**, and genuinely antialiased for the first time — the
+old frames came out of a GIF and had binary alpha.
 
-**Deferred deliberately.** Doing this properly is a real chunk of art work, not a
-find-and-replace, and it is too expensive to take on right now. Until it happens the
-disclosure in `docs/ASSETS.md` stands.
+### 6b. The other dice — the cheap part now
+
+The CC0 pack also contains a D4, D8, D10, D10-percentile, D12, D20 and a numbered D6, all
+manifold and all under the same terms, and the whole render pipeline is parameterised by
+which object it points at. Adding them is mostly deciding what the *game* does with a d20:
+`Dice.Roll()` hardcodes `random.Next(1, 7)`, `dice.tscn` names its animations `"1"`…`"6"`,
+and `GameManager` fetches a single node called `Dice`. Worth doing **after** item 1 — once
+the physics decides the number, "which face is up" generalises to any solid, and adding dice
+becomes a data change rather than six more hardcoded animations.
 
 ## 7. Stop the die tunnelling through the walls — investigation
 

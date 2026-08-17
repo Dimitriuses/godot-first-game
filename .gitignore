@@ -9,3 +9,13 @@ builds/
 bin/
 obj/
 *.user
+
+# Die animation pipeline intermediates (see tools/dice-render/)
+tools/dice-render/build/
+
+# CC0 source model for the die: ~22 MB, re-downloadable from Blend Swap #82440.
+# The licence page that ships with it IS committed, as the record of the grant.
+assets/*.zip
+assets/**/*.blend
+
+tools/dice-render/__pycache__

@@ -128,8 +128,10 @@ alone.
 - **The export preset uses `export_filter="all_resources"`**, so every file under `assets/`
   ships in the binary whether a scene uses it or not. That was 12.8 MB of unreferenced
   Kenney artwork until the July 2026 cleanup.
-- **The die artwork is 18.6 MB** — eight 5120×5120 spritesheets for one six-sided die, at
-  four times the resolution it is drawn at (the sprite is scaled to 0.25).
+- ~~**The die artwork is 18.6 MB**~~ — eight 5120×5120 spritesheets for one six-sided die,
+  at four times the resolution it was drawn at. Fixed in August 2026 by re-rendering the
+  animation at 128px cells drawn at 1:1: 3.9 MB for the same on-screen result, and a CC0
+  source into the bargain. See [docs/ASSETS.md](docs/ASSETS.md).
 
 ## 7. Nothing is tested
 

@@ -112,8 +112,9 @@ Everything here was reproduced by running the project, not inferred from reading
 - **Console output is in Ukrainian**, mixed with English identifiers.
 - **`CollisionShape2D` is scaled 6×** in `dice.tscn` rather than being authored at its real
   size — something Godot explicitly advises against.
-- **The die artwork is third-party with unknown terms** — see the disclosure in
-  [docs/ASSETS.md](docs/ASSETS.md). It is 18.6 MB of the repository.
+- ~~**The die artwork is third-party with unknown terms.**~~ Fixed in August 2026: the
+  animation was re-rendered from a CC0 model and is now 3.9 MB instead of 18.6 MB — see
+  [docs/ASSETS.md](docs/ASSETS.md).
 
 `KNOWNISSUES.md` carries the same list with the measurements; `ROADMAP.md` records what the
 project was heading towards.
