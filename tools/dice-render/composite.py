@@ -51,7 +51,7 @@ def over(cf, af, cb, ab):
 
 
 def process(tag):
-    src = os.path.join(WORK, tag)
+    src = os.path.join(WORK, "faces", tag) if tag.startswith("face") or tag.startswith("idle") else os.path.join(WORK, tag)
     meta = json.load(open(os.path.join(src, "meta.json")))
     res = meta["res"]
     dst = os.path.join(OUT, tag)

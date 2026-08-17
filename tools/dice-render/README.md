@@ -19,12 +19,20 @@ Blend Swap #82440 if you need to re-run this.
 
 Needs Blender 4.4+ and Python with `pillow` and `numpy`.
 
+### Jupyter notebook (Windows)
+
+Open `dice_render.ipynb`, run the setup cell, and then run the pipeline cell. The notebook
+asks you to type `RUN` before every stage; opening it does not execute anything. Update the
+`BLENDER` path in the setup cell if Blender is installed elsewhere.
+
 ```sh
 export DICE_WORK=/tmp/dice-build          # optional; defaults to ./build
 
 # 1. render crisp sub-frames  (~5 min, ~4900 renders at 512px)
-blender "references/Dice D20 D12 D8 D10 D8 D6 D4/Dices blendswap.blend" \
-        --background --python tools/dice-render/render.py
+& blender.exe `
+  "assets\Dice D20 D12 D8 D10 D8 D6 D4\Dices blendswap.blend" `
+  --background `
+  --python "tools\dice-render\render.py"
 
 # 2. accumulate them into motion-blurred 128px frames  (~2 min)
 python tools/dice-render/composite.py
@@ -43,7 +51,7 @@ modify the source model and does not save the `.blend`.
 
 | | |
 |---|---|
-| `render.py` | Builds the toon material and camera, then renders each output frame as up to 20 crisp samples across its shutter interval. Writes a `meta.json` per animation recording the sub-frame count and the ground-shadow position for each sample. |
+| `render.py` | Builds the toon material and camera, then renders each output frame as up to 20 crisp samples across its shutter interval. Numbered-roll samples go to `build/faces/face#`; idle samples go to `build/idle#`. Writes a `meta.json` per animation recording the sub-frame count and the ground-shadow position for each sample. |
 | `composite.py` | Per sub-frame: shadow, then an alpha-dilated black outline, then the die. Averages the sub-frames — that average *is* the motion blur — then box-downsamples 512→128. |
 | `pack.py` | Lays frames out 10 per row into the sheets `dice.tscn` indexes. |
 | `validate.py` | Re-reads `dice.tscn` and checks every atlas region against the PNGs on disk. |
@@ -62,6 +70,10 @@ modify the source model and does not save the `.blend`.
 - **Sub-frame count scales with angular speed** (`deg_per_sub`), so slow frames near the
   landing cost one render and fast ones cost twenty. Dropping `max_sub` below about 16
   brings back visible ghosting on the first few frames.
+- **The camera is orthographic.** `ortho_scale` controls framing without introducing
+  perspective convergence as the die moves toward or away from the camera.
+- **Both idle loops match the opening speed of a numbered roll.** `idle1` additionally
+  cycles through the original animation's rainbow hues as a seamless colour gradient.
 - **Frame counts are load-bearing.** `dice.tscn` holds 91 frames per face and 30 per idle
   loop, and `Dice.cs` plays them by name. Changing the counts means regenerating the atlas
   regions in the scene, not just the sheets.

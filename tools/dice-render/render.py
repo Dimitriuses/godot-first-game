@@ -7,11 +7,12 @@ called "DiceRender".
     blender "references/Dice D20 D12 D8 D10 D8 D6 D4/Dices blendswap.blend" \
             --background --python tools/dice-render/render.py
 
-Output goes to $DICE_WORK (default tools/dice-render/build/), one directory per
-animation holding the sub-frames plus a meta.json describing them. Motion blur,
-outline and shadow are applied afterwards by composite.py.
+Output goes to $DICE_WORK (default tools/dice-render/build/). Numbered rolls are
+written below faces/, while idle animations remain at the build root. Each animation
+directory holds the sub-frames plus a meta.json describing them. Motion blur, outline
+and shadow are applied afterwards by composite.py.
 """
-import bpy, bmesh, math, json, os, sys
+import bpy, bmesh, colorsys, math, json, os, sys
 from mathutils import Vector, Quaternion, Euler
 from bpy_extras.object_utils import world_to_camera_view
 
@@ -35,6 +36,10 @@ BANDS = [(0.00, "darkest"), (0.14, "dark"), (0.38, "mid"), (0.65, "lit")]
 
 def srgb2lin(h):
     c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    return srgb_tuple_to_lin(c)
+
+
+def srgb_tuple_to_lin(c):
     f = lambda v: v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
     return tuple(f(v) for v in c) + (1.0,)
 
@@ -154,7 +159,7 @@ def toon_material():
     L(thr.outputs[0], bodymix.inputs['Fac'])
     L(bodymix.outputs['Color'], emis.inputs['Color'])
     L(emis.outputs[0], out.inputs['Surface'])
-    return mat
+    return mat, ramp
 
 
 def build_scene():
@@ -174,13 +179,16 @@ def build_scene():
     src = bpy.data.objects[SRC_OBJECT]
     nm = normalised_mesh(src)
     values = pip_masks(nm)
-    nm.materials.append(toon_material())
+    mat, ramp = toon_material()
+    nm.materials.append(mat)
 
     die = bpy.data.objects.new("DieRender", nm)
     sc.collection.objects.link(die)
     die.rotation_mode = 'QUATERNION'
 
-    cd = bpy.data.cameras.new("DieCam"); cd.type = 'PERSP'; cd.lens = 85
+    cd = bpy.data.cameras.new("DieCam")
+    cd.type = 'ORTHO'
+    cd.ortho_scale = 3.25       # margin for the high starting pose; avoids top-edge crop
     cam = bpy.data.objects.new("DieCam", cd)
     sc.collection.objects.link(cam)
     elev, azim, dist = math.radians(31), math.radians(45), 7.2
@@ -189,7 +197,7 @@ def build_scene():
     cam.location = Vector((0, 0, 0.92)) + d * dist   # aimed high so the die sits low in frame
     cam.rotation_euler = (math.pi / 2 - elev, 0, azim)
     sc.camera = cam
-    return sc, die, cam, values
+    return sc, die, cam, values, ramp
 
 
 # -------------------------------------------------------------------- animation
@@ -254,9 +262,13 @@ def face_motion(values, n, f, nframes=91):
     return loc, q
 
 
-# Idle loops spin a whole number of turns over the clip, so frame N == frame 0.
-IDLE = {0: dict(turns=2.0, axis=(0.25, 0.45, 0.86), bob=0.20, base=1),
-        1: dict(turns=3.0, axis=(0.72, -0.38, 0.58), bob=0.30, base=5)}
+# Both idle loops use the opening speed of the numbered roll: the derivative of
+# turns * 2*pi * (1 - f/SPIN_END)^2.2 at frame zero.  Keeping a whole number of
+# turns makes the 30-frame loop seamless, so seven turns is also the closest
+# whole-turn match to the six face clips (6.2--7.9 turns over 66 frames).
+IDLE_TURNS = 7.0
+IDLE = {0: dict(axis=(0.25, 0.45, 0.86), bob=0.20, base=1),
+        1: dict(axis=(0.72, -0.38, 0.58), bob=0.30, base=5)}
 
 
 def idle_motion(values, k, f, nframes=30):
@@ -264,8 +276,20 @@ def idle_motion(values, k, f, nframes=30):
     s = f / nframes                                 # /n, not /(n-1)
     z = REST_Z + 0.28 + p["bob"] * math.sin(2 * math.pi * s)
     q = Quaternion(Vector(p["axis"]).normalized(),
-                   p["turns"] * 2 * math.pi * s) @ rest_quat(values, p["base"])
+                   IDLE_TURNS * 2 * math.pi * s) @ rest_quat(values, p["base"])
     return Vector((0.0, 0.0, z)), q
+
+
+def set_palette_gradient(ramp, phase):
+    """Cycle idle1 through the original animation's seamless rainbow."""
+    keys = [key for _, key in BANDS]
+    hue = phase % 1.0
+    tint = Vector(colorsys.hsv_to_rgb(hue, 0.55, 1.0))
+    lit = Vector((0.95, 0.95, 0.98))
+    for elem, key in zip(ramp.color_ramp.elements, keys):
+        base = Vector(tuple(int(PALETTE[key][i:i + 2], 16) / 255 for i in (0, 2, 4)))
+        shade = sum(base) / sum(lit)
+        elem.color = srgb_tuple_to_lin(tuple(min(1.0, c * shade) for c in tint))
 
 
 # --------------------------------------------------------------------- rendering
@@ -286,9 +310,9 @@ def ang_between(qa, qb):
 
 
 def render_anim(sc, cam, die, tag, nframes, motion, shutter=0.9,
-                deg_per_sub=4.0, max_sub=20):
+                deg_per_sub=4.0, max_sub=20, before_sample=None):
     """Render each frame as several crisp samples across its shutter interval."""
-    out = os.path.join(WORK, tag)
+    out = os.path.join(WORK, "faces", tag) if tag.startswith("face") or tag.startswith("idle") else os.path.join(WORK, tag)
     os.makedirs(out, exist_ok=True)
     meta = {"tag": tag, "nframes": nframes, "res": sc.render.resolution_x, "frames": []}
     for f in range(nframes):
@@ -297,6 +321,8 @@ def render_anim(sc, cam, die, tag, nframes, motion, shutter=0.9,
         subs = []
         for i in range(nsub):
             off = 0.0 if nsub == 1 else shutter * (i / (nsub - 1) - 0.5)
+            if before_sample:
+                before_sample(f + off)
             die.location, die.rotation_quaternion = motion(f + off)
             bpy.context.view_layer.update()
             sc.render.filepath = os.path.join(out, "f%03d_s%02d.png" % (f, i))
@@ -308,7 +334,7 @@ def render_anim(sc, cam, die, tag, nframes, motion, shutter=0.9,
 
 
 def main():
-    sc, die, cam, values = build_scene()
+    sc, die, cam, values, ramp = build_scene()
     if bpy.context.window:
         bpy.context.window.scene = sc
     print("pips per face:", {v: k for k, v in values.items()})
@@ -320,7 +346,9 @@ def main():
         print("  face%d done (%d sub-frames so far)" % (n, total))
     for k in (0, 1):
         total += render_anim(sc, cam, die, "idle%d" % k, 30,
-                             lambda f, k=k: idle_motion(values, k, f))
+                             lambda f, k=k: idle_motion(values, k, f),
+                             before_sample=(lambda f: set_palette_gradient(ramp, f / 30.0))
+                             if k == 1 else None)
         print("  idle%d done (%d sub-frames so far)" % (k, total))
     print("%d sub-frames -> %s" % (total, WORK))
 
