@@ -4,8 +4,8 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Grab a die with the mouse, sling it across a pixel-art board, and let go — the die tumbles,
-lands, and reports a number. My first project in **Godot 4**, written in **C#** in May–June
+Drag dice from the right-side palette, sling them across a pixel-art board, and let go —
+they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
 2025 while learning the engine's 2D physics: `RigidBody2D`, `PinJoint2D` mouse dragging,
 `Area2D` bounds detection and `AnimatedSprite2D`.
 
@@ -15,11 +15,19 @@ lands, and reports a number. My first project in **Godot 4**, written in **C#** 
 
 | Input | Action |
 |---|---|
+| **Tab** or **right-edge arrow** | open or close the dice palette |
+| **Drag D6 from the palette** | add another die to the board |
 | **Left-click and drag the die** | grab it — a pin joint follows the cursor, so you can fling or spin it |
 | **Release the left button** | let go and roll |
-| **"Respawn" button** | recentre the die and kill its velocity |
+| **Hold Shift, then drag a die** | select and throw every die together |
+| **Space** | roll every die once, simultaneously |
+| **Total button** | open or close the bottom-left die list |
+| **Hover a die-list row** | highlight its die on the board |
+| **× in a die-list row** | remove that die |
+| **Delete All** | remove every die from the board |
+| **"Respawn" button** | arrange all dice near the centre and kill their velocity |
 
-There is no menu, no score, and no way to lose. It is a toy, not a game.
+There is no score and no way to lose. It is a toy, not a game.
 
 ![the board at rest](docs/screenshot.png)
 
@@ -68,7 +76,7 @@ Exporting a Windows binary uses the committed preset, which writes to `builds/`
 **There is no browser demo, and there cannot be one yet.** Godot's .NET flavour does not
 support the Web platform — the installed `4.4.1.stable.mono` export-template set contains
 Windows, Linux, macOS, Android and iOS templates and **no web templates at all**. A
-playable Pages demo would mean porting all three scripts to GDScript.
+playable Pages demo would mean porting the C# gameplay scripts to GDScript.
 
 ## Layout
 
@@ -76,6 +84,8 @@ playable Pages demo would mean porting all three scripts to GDScript.
 scenes/     game.tscn (board, walls, bounds area, UI), dice.tscn, Player.tscn
 scripts/    GameManager.cs   drag/release, respawn, bounds handling
             Dice.cs          roll result + face animations
+            DicePalette.cs   right-side drag-to-spawn dice menu
+            DiceHud.cs       sorted die values, total and deletion controls
             Player.cs        board-piece stub, not instantiated
 assets/     dice/            die animation frames  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
@@ -83,7 +93,7 @@ assets/     dice/            die animation frames  (see docs/ASSETS.md)
 docs/       screenshot, GIF, asset provenance
 ```
 
-Three scripts, 160 lines of C# between them (205 before the cleanup).
+The gameplay and runtime UI are implemented in C#.
 
 ## Known limitations
 
@@ -108,7 +118,7 @@ Everything here was reproduced by running the project, not inferred from reading
 - **Nothing moves until you touch it.** Gravity is disabled (top-down board), so the opening
   scene is completely static: 1,800 consecutive rendered frames are byte-identical.
 - **The board game was never built.** `Player.cs` is not instantiated by anything.
-- **No tests, no CI.** Three scripts of engine glue with no logic worth pinning.
+- **No tests, no CI.** The engine-facing gameplay code is currently verified manually.
 - **Console output is in Ukrainian**, mixed with English identifiers.
 - **`CollisionShape2D` is scaled 6×** in `dice.tscn` rather than being authored at its real
   size — something Godot explicitly advises against.

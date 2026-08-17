@@ -5,9 +5,10 @@ public partial class Dice : RigidBody2D
 {
 	[Export] public AnimatedSprite2D AnimatedSprite;
 	[Export] public CollisionShape2D CollisionShape;
+	[Export] public float CollisionRollSpeed = 140f;
 
-	private Random random = new Random();
 	private int currentResult = 1;
+	private ulong lastCollisionRollMs;
 
 	public bool isDragging = false;
 	private bool isRolling = false;
@@ -18,6 +19,9 @@ public partial class Dice : RigidBody2D
 	public override void _Ready()
 	{
 		AnimatedSprite.AnimationFinished += OnAnimationFinished;
+		ContactMonitor = true;
+		MaxContactsReported = 4;
+		BodyEntered += OnBodyEntered;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -25,14 +29,9 @@ public partial class Dice : RigidBody2D
 		// Keep the face upright while the body itself spins.
 		AnimatedSprite.Rotation = -Rotation;
 
-		if (AngularVelocity > 5)
+		if (!isRolling && AngularVelocity > 5)
 		{
 			AnimatedSprite.Play("idle0");
-		}
-		else if (!isDragging && AnimatedSprite.IsPlaying()
-			&& (AnimatedSprite.Animation == "idle0" || AnimatedSprite.Animation == "idle1"))
-		{
-			Roll();
 		}
 
 		if (isDragging && AngularVelocity > 10)
@@ -43,7 +42,10 @@ public partial class Dice : RigidBody2D
 
 	public void Roll()
 	{
-		currentResult = random.Next(1, 7);
+		if (isRolling)
+			return;
+
+		currentResult = Random.Shared.Next(1, 7);
 		isRolling = true;
 		AnimatedSprite.Play(currentResult.ToString());
 	}
@@ -58,4 +60,24 @@ public partial class Dice : RigidBody2D
 	}
 
 	public int GetResult() => currentResult;
+
+	public void SetHovered(bool hovered)
+	{
+		AnimatedSprite.Scale = hovered ? Vector2.One * 1.12f : Vector2.One;
+		AnimatedSprite.ZIndex = hovered ? 20 : 0;
+	}
+
+	private void OnBodyEntered(Node body)
+	{
+		if (body is not Dice other)
+			return;
+
+		float impactSpeed = (LinearVelocity - other.LinearVelocity).Length();
+		ulong now = Time.GetTicksMsec();
+		if (!isRolling && impactSpeed >= CollisionRollSpeed && now - lastCollisionRollMs >= 250)
+		{
+			lastCollisionRollMs = now;
+			Roll();
+		}
+	}
 }
