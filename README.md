@@ -21,7 +21,7 @@ they tumble, land, and report a number. My first project in **Godot 4**, written
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
 | **Hold Shift, then drag a die** | select and throw every die together |
-| **Space** | roll every die once, simultaneously |
+| **Space** | throw every die — they scatter across the board as well as rolling |
 | **Total button** | open or close the bottom-left die list |
 | **Hover a die-list row** | highlight its die on the board |
 | **× in a die-list row** | remove that die |
@@ -44,18 +44,16 @@ game's board, and there is a `Player` script and a ring of eight cell coordinate
 history to prove that was the plan — but nothing ever moves around it. What exists is the
 die.
 
-Two things a reviewer should know before reading the code, because neither is visible from
-the screenshot:
+**The number is no longer a bare random draw**, though it is not physical either. It is
+taken from the frame of the tumble the die was let go on, nudged by a random factor: the idle
+loop covers all six faces across its length, so the moment you release picks a base face and
+the jitter decides how near it you land. The roll animation resumes from that same frame, so
+the spin you were watching carries into the throw. A throw can be influenced but not aimed,
+and the die stays fair.
 
-- **The physics does not decide the number.** `Dice.Roll()` calls `random.Next(1, 7)` and
-  then plays the animation for that face. The tumble you see is a pre-rendered sprite
-  animation chosen *after* the result. The die's actual orientation when it stops is
-  unrelated to the number reported.
-- **The number shown is not the number rolled physically.** As above — the HUD faithfully
-  reports whatever `System.Random` picked, which is not what the die did.
-
-The first point is untouched and is the headline item in [ROADMAP.md](ROADMAP.md); see
-*Known limitations* for the rest.
+What that does **not** do is read the number off where the die physically stops — that is
+still the honest fix, and [ROADMAP.md](ROADMAP.md) item 1 records a full implementation that
+was built, tested and then deliberately reverted as more machinery than this toy warrants.
 
 ## Running it
 
@@ -103,8 +101,9 @@ The gameplay and runtime UI are implemented in C#.
 
 Everything here was reproduced by running the project, not inferred from reading it.
 
-- **The result is random, not physical** (above). A die whose face is decided by
-  `System.Random` is a slot machine with extra steps.
+- **The result is still not physical**, though no longer a bare draw: it comes from the
+  tumble frame the die was released on plus a random factor. It is not read off where the
+  die actually stops. See [ROADMAP.md](ROADMAP.md) item 1.
 - ~~**The result is invisible in-game.**~~ Fixed: `DiceHud` lists every die with its value
   and a running total. The spare `Label` in `game.tscn` is still unused, though — the HUD
   was built instead of binding it.
@@ -123,9 +122,10 @@ Everything here was reproduced by running the project, not inferred from reading
 - **Nothing moves until you touch it.** Gravity is disabled (top-down board), so the opening
   scene is completely static: 1,800 consecutive rendered frames are byte-identical.
 - **The board game was never built.** `Player.cs` is not instantiated by anything.
-- **No tests, no CI.** Nothing is committed. The dice rewrite was verified with a throwaway
-  headless harness that was then deleted; the recipe is in [CLAUDE.md](CLAUDE.md), and
-  making it permanent is the cheapest real improvement available here.
+- **No tests, no CI.** Nothing is committed. Each change to the die has been verified with a
+  throwaway headless harness — 21 checks on the current build — that is then deleted. The
+  recipe is in [CLAUDE.md](CLAUDE.md), and making it permanent is the cheapest real
+  improvement available here.
 - ~~**Console output is in Ukrainian.**~~ No longer true: there is no non-ASCII text left in
   `scripts/`, and the one remaining `GD.Print` is `"Rolled: " + result`.
 - ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed: the die now uses an unscaled 32 px-radius

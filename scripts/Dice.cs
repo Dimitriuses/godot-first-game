@@ -4,8 +4,8 @@ using System;
 /// <summary>
 /// A die, and the small state machine that drives its sprite.
 ///
-/// There are exactly three visual states, and every transition sets the sprite
-/// explicitly, so nothing ever has to poll for or repair a stalled animation:
+/// Three visual states, and every transition sets the sprite explicitly, so
+/// nothing ever has to poll for or repair a stalled animation:
 ///
 ///   Resting  one static frame — the last frame of <see cref="currentResult"/>'s
 ///            clip, which is the die sitting still showing that face.
@@ -13,6 +13,11 @@ using System;
 ///            *only* while the die is held, so a free die is never left looping.
 ///   Rolling  one of the "1".."6" clips. It ends on its own last frame, which is
 ///            the resting pose, and emits <see cref="DiceRolledEventHandler"/>.
+///
+/// The number is not a bare random draw. It is taken from **where the die was in
+/// its tumble at the moment it was let go**, nudged by a random factor — see
+/// <see cref="ChooseResult"/>. The roll clip also picks up from that same frame,
+/// so the spin the player was watching carries into the throw instead of cutting.
 /// </summary>
 public partial class Dice : RigidBody2D
 {
@@ -27,12 +32,22 @@ public partial class Dice : RigidBody2D
 	/// Speed a release must exceed to roll even if the die never span up.
 	[Export] public float ReleaseRollSpeed = 180f;
 
+	/// How far the random factor may move the face away from the one the release
+	/// frame picked. 0 makes the throw fully aimable; 3 makes the frame irrelevant.
+	[Export] public int ResultJitter = 2;
+
 	/// How hard a held die must be moved to spin it up to idle0, then to idle1.
 	[Export] public float SpinOnSpeed = 120f;
 	[Export] public float FastSpinOnSpeed = 600f;
 	/// The same, for a die swung hard enough to rotate about the mouse pin.
 	[Export] public float SpinOnAngular = 1.5f;
 	[Export] public float FastSpinOnAngular = 8f;
+
+	/// Impulse Throw() gives a die, so the Space key scatters them across the board
+	/// rather than animating them on the spot.
+	[Export] public float ThrowSpeedMin = 220f;
+	[Export] public float ThrowSpeedMax = 400f;
+	[Export] public float ThrowSpinMax = 9f;
 
 	private int currentResult = 1;
 	private bool isHeld;
@@ -44,6 +59,7 @@ public partial class Dice : RigidBody2D
 
 	public bool IsHeld => isHeld;
 	public bool IsRolling => isRolling;
+	public int GetResult() => currentResult;
 
 	[Signal]
 	public delegate void DiceRolledEventHandler(int result);
@@ -147,27 +163,88 @@ public partial class Dice : RigidBody2D
 
 	// ------------------------------------------------------------------- rolling
 
-	/// <param name="forced">
-	/// 1-6 to land on a chosen face instead of a random one. Used by the screenshot
-	/// tool in tools/screenshots so the generated images are reproducible; 0, the
-	/// default, rolls normally.
-	/// </param>
-	public void Roll(int forced = 0)
+	/// <summary>
+	/// Throw the die across the board and roll it. This is what the Space key does:
+	/// the dice scatter as well as animating, rather than tumbling on the spot.
+	/// </summary>
+	public void Throw()
 	{
 		if (isRolling)
 			return;
 
-		currentResult = forced is >= 1 and <= 6 ? forced : Random.Shared.Next(1, 7);
+		float angle = Random.Shared.NextSingle() * Mathf.Tau;
+		float speed = Random.Shared.NextSingle() * (ThrowSpeedMax - ThrowSpeedMin)
+			+ ThrowSpeedMin;
+
+		Freeze = false;
+		LinearVelocity = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * speed;
+		AngularVelocity = (Random.Shared.NextSingle() * 2f - 1f) * ThrowSpinMax;
+		Roll();
+	}
+
+	/// <summary>
+	/// Play a roll. The face comes from where the die was in its tumble when this
+	/// was called, plus a random nudge; the clip picks up from that same frame.
+	/// </summary>
+	public void Roll()
+	{
+		if (isRolling)
+			return;
+
+		int releaseFrame = CurrentIdleFrame();
+		currentResult = ChooseResult(releaseFrame);
 		ClearHeld();
 		isRolling = true;
 
-		// Play first, then rewind: Play() only rewinds when it actually changes clip,
-		// so rolling the same number twice would otherwise resume mid-tumble.
-		StringName animation = currentResult.ToString();
+		StringName clip = currentResult.ToString();
+		SpriteFrames frames = AnimatedSprite.SpriteFrames;
+		int start = 0;
+		if (releaseFrame >= 0 && frames != null && frames.HasAnimation(clip))
+			start = Mathf.Min(releaseFrame, frames.GetFrameCount(clip) - 1);
+
+		// Play first, then place the frame: Play() only rewinds when it actually
+		// changes clip, so rolling the same number twice would otherwise resume
+		// wherever the previous one left off.
 		AnimatedSprite.SpeedScale = 1f;
-		AnimatedSprite.Play(animation);
-		AnimatedSprite.Frame = 0;               // setting Frame also clears FrameProgress
+		AnimatedSprite.Play(clip);
+		AnimatedSprite.Frame = start;       // setting Frame also clears FrameProgress
 	}
+
+	/// The frame of the idle loop currently on screen, or -1 if the die is not
+	/// tumbling — a die at rest has no release moment to read.
+	private int CurrentIdleFrame()
+	{
+		StringName animation = AnimatedSprite.Animation;
+		if (animation != Idle0 && animation != Idle1)
+			return -1;
+		return AnimatedSprite.Frame;
+	}
+
+	/// <summary>
+	/// Pick the face. The tumble frame the die was let go on chooses a base face —
+	/// the idle loop covers all six across its length — and a random offset decides
+	/// how close to that it actually lands, so the throw can be influenced but not
+	/// aimed. A die that was not tumbling has no frame to read and falls back to a
+	/// plain draw.
+	/// </summary>
+	private int ChooseResult(int releaseFrame)
+	{
+		SpriteFrames frames = AnimatedSprite.SpriteFrames;
+		int idleLength = frames != null && frames.HasAnimation(Idle0)
+			? frames.GetFrameCount(Idle0) : 0;
+
+		int baseFace = releaseFrame >= 0 && idleLength > 0
+			? releaseFrame * 6 / idleLength + 1
+			: Random.Shared.Next(1, 7);
+
+		if (ResultJitter <= 0)
+			return WrapFace(baseFace);
+
+		int offset = Random.Shared.Next(-ResultJitter, ResultJitter + 1);
+		return WrapFace(baseFace + offset);
+	}
+
+	private static int WrapFace(int face) => ((face - 1) % 6 + 6) % 6 + 1;
 
 	private void OnAnimationFinished()
 	{
@@ -183,24 +260,45 @@ public partial class Dice : RigidBody2D
 		EmitSignal(SignalName.DiceRolled, currentResult);
 	}
 
+	// ---------------------------------------------------------------- appearance
+
 	/// Park the sprite on the resting pose: the roll clips end on the die sitting
 	/// still, so that last frame *is* the idle picture for the current face.
 	private void ShowResting()
 	{
-		StringName animation = currentResult.ToString();
+		StringName clip = currentResult.ToString();
 		SpriteFrames frames = AnimatedSprite.SpriteFrames;
-		if (frames == null || !frames.HasAnimation(animation))
+		if (frames == null || !frames.HasAnimation(clip))
 			return;
 
 		// Stop() rewinds to frame 0 and Animation= does the same, so both have to
 		// happen before the frame is placed.
 		AnimatedSprite.Stop();
-		AnimatedSprite.Animation = animation;
-		AnimatedSprite.Frame = frames.GetFrameCount(animation) - 1;
+		AnimatedSprite.Animation = clip;
+		AnimatedSprite.Frame = frames.GetFrameCount(clip) - 1;
 		AnimatedSprite.FrameProgress = 1f;
 	}
 
-	public int GetResult() => currentResult;
+	/// <summary>
+	/// Put the die down showing a chosen face, without rolling for it. This is how
+	/// the screenshot tool gets a reproducible board; it is also what anything
+	/// restoring a saved board would want.
+	/// </summary>
+	public void PlaceOnFace(int face)
+	{
+		if (face is < 1 or > 6)
+			return;
+
+		currentResult = face;
+		isRolling = false;
+		ClearHeld();
+		LinearVelocity = Vector2.Zero;
+		AngularVelocity = 0f;
+		lastPosition = GlobalPosition;
+		AnimatedSprite.SpeedScale = 1f;
+		ShowResting();
+		EmitSignal(SignalName.DiceRolled, face);
+	}
 
 	public void SetHovered(bool hovered)
 	{

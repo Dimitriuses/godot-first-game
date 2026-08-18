@@ -111,6 +111,23 @@ Mouse input. The tests drove `Dice.StartDragging()` / `ReleaseFromDrag()` direct
 than synthesising clicks, so the `InputEvent` → `PinJoint2D` path in `GameManager` is not
 covered. Click and fling by hand once before calling a drag change done.
 
+## Where the number comes from
+
+Not from a bare `System.Random` draw, and not from the physics either. `Dice.Roll()` reads
+the frame of the idle tumble on screen when it is called, maps it onto a face (the 30-frame
+idle loop covers all six), and applies a random offset of up to `ResultJitter`. The roll clip
+then resumes from that same frame, so the tumble carries over rather than cutting.
+
+Two consequences that look wrong and are not:
+
+- **A die rolled from rest has no release frame** and falls back to a plain draw. There is no
+  tumble to read.
+- **`ResultJitter = 0` makes the throw exactly aimable.** That is a debugging aid, not the
+  default; the shipped value of 2 is what keeps it a throw.
+
+ROADMAP item 1 records a full physics implementation that was built, tested and reverted, and
+why. Do not rebuild it without reading that first.
+
 ## Gotchas
 
 - **`AnimatedSprite2D.Stop()` rewinds to frame 0.** `Pause()` is the one that keeps the
@@ -130,6 +147,13 @@ covered. Click and fling by hand once before calling a drag change done.
   zero. `Dice` measures its own position delta instead, which works for both drag styles.
 - **`PhysicsServer2D.BodySetState` needs the freeze/unfreeze dance around it** or it silently
   does nothing on a resting body. This is measured, not superstition — KNOWNISSUES 5.
+- **Teleporting a die registers as a hard contact.** `freeze_mode` is Kinematic, so moving a
+  frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
+  and the collision re-roll starts a clip. Anything that repositions dice should switch
+  `ContactMonitor` off first — the screenshot tool does, after this cost it determinism twice.
+- **Do not zero a die's `CollisionLayer` to quiet it.** The bounds `Area2D` finds bodies by
+  layer, so clearing it makes `BodyExited` fire and the out-of-bounds recovery teleports every
+  die back to the spawn point. Turn off `ContactMonitor` instead.
 
 ## Regenerating the README images
 

@@ -8,24 +8,31 @@ wrong survives.
 
 ---
 
-## 1. The die's number is not decided by the physics
+## 1. The die's number is not decided by the physics — still true, but softened
 
-`Dice.Roll()`:
+It used to read:
 
 ```csharp
 currentResult = random.Next(1, 7);
 AnimatedSprite.Play(currentResult.ToString());
 ```
 
-The result is drawn from `System.Random` and the matching face animation is then played.
-The tumble is a pre-rendered sprite sequence, and the body's real orientation when it comes
-to rest has nothing to do with the number reported. Rolling five times in a scripted session
-returned 4, 3, 3, 3, 2 — all from the RNG, none from the simulation.
+— the number drawn from `System.Random`, the matching animation played afterwards, and the
+body's real state having nothing to do with it.
 
-This is the most interesting thing in the project and the biggest gap between what it looks
-like and what it is. **Fixing it properly** means giving the die a real orientation, reading
-the up-face when angular velocity drops below a threshold, and only then reporting — which
-is the single change that would turn this from a toy into a dice roller.
+The bare draw is gone. `Dice.Roll()` now takes the face from **the frame of the idle tumble
+the die was released on**, nudged by a random offset (`ResultJitter`). The idle loop covers
+all six faces across its 30 frames, so the release moment picks a base face and the jitter
+decides how near it the throw lands — influenceable, not aimable. The roll clip resumes from
+that same frame, so the tumble carries over instead of cutting.
+
+Measured: with the jitter off the mapping is exact (frames 0/5/10/15/20/25 give faces 1-6),
+every jittered result stays within two faces of the frame's face over 600 rolls, and 12,000
+rolls stay fair (1,953-2,049 per face against 2,000 expected).
+
+**What is still wrong:** the number has no connection to where the die physically comes to
+rest. A full physics implementation was built and reverted — see [ROADMAP.md](ROADMAP.md)
+item 1 for what it took and why it was dropped.
 
 ## 2. The result never reaches the screen — fixed
 

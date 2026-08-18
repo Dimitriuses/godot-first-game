@@ -36,10 +36,20 @@ Nothing is allowed to free-run:
 
 - **Dice are placed at literal coordinates** and frozen, not dropped and left to
   settle. Gravity is off in this project anyway, so no physics runs during capture.
-- **Faces are forced, not rolled.** `Dice.Roll(int forced = 0)` takes an optional
-  face; the capture passes 5, 2, 6 and 4, which is why the HUD always reads
-  `Total: 17`. The dice are still rolled through the normal path, so `DiceRolled`
-  fires and the HUD populates itself the way it does in play.
+- **Faces are placed, not rolled.** `Dice.PlaceOnFace(n)` parks the die on face
+  `n` and reports it — a put-down rather than a roll, with no clip to wait out and
+  nothing random. The capture places 5, 2, 6 and 4, which is why the HUD always
+  reads `Total: 17`, and `DiceRolled` still fires so the HUD populates itself the
+  way it does in play.
+- **The dice are parked before anything is moved**, with `_PhysicsProcess` and
+  `ContactMonitor` both off. This tool teleports dice, `freeze_mode` is Kinematic
+  so that reads as a hard contact, and the collision re-roll then starts clips
+  playing behind the shot. Parking them afterwards is too late — the roll has
+  already begun, and `AnimatedSprite2D` keeps advancing in `_process` even with
+  `_PhysicsProcess` off.
+- **`ContactMonitor`, not `CollisionLayer`.** Zeroing the layer also hides the dice
+  from the bounds `Area2D`, whose `BodyExited` then fires for every one of them and
+  the out-of-bounds recovery teleports the whole board back to the spawn point.
 - **The roll frames are stepped by hand.** Playback is stopped and
   `AnimatedSprite2D.Frame` is set to each index in turn, so one output PNG maps to
   exactly one source frame regardless of how fast the machine renders. Nothing
@@ -48,10 +58,10 @@ Nothing is allowed to free-run:
   new adaptive palette per frame, which both dithers inconsistently and destroys
   inter-frame compression.
 
-The only frame timing that is *not* stepped is the wait for the four dice to
-finish their landing animations before the still is taken. That is a generous
-fixed wait (300 physics ticks ≈ 5 s for a 3.1 s animation), so the **end state**
-is deterministic even though the path to it is not.
+Every step is now either an explicit assignment or a fixed frame count. The
+earlier version had to wait out four 3.1-second landing animations before taking
+the still, which was only deterministic in its *end* state; `PlaceOnFace` put the
+dice down instantly and removed that wait entirely.
 
 ## Tuning
 
@@ -71,7 +81,6 @@ without re-running Godot each time.
 ## Note on the API this uses
 
 `Capture.cs` calls four things that exist as `public` partly for its benefit:
-`GameManager.SpawnDie`, `DiceHud.SetOpen`, `DicePalette.SetDrawerOpen` and the
-optional argument on `Dice.Roll`. The first three are reasonable public operations
-in their own right; the `forced` argument on `Roll` exists only for reproducible
-images and defaults to normal random behaviour.
+`GameManager.SpawnDie`, `DiceHud.SetOpen`, `DicePalette.SetDrawerOpen` and
+`Dice.PlaceOnFace`. All four are reasonable public operations in their own right —
+`PlaceOnFace` in particular is what anything restoring a saved board would want.

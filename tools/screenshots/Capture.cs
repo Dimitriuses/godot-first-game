@@ -9,11 +9,13 @@ using System.Threading.Tasks;
 ///   roll/f000..f090.png  one PNG per frame of a die's roll animation
 ///
 /// Determinism comes from never letting anything free-run. Dice are placed at
-/// literal coordinates, faces are forced rather than rolled, and the roll frames
-/// are captured by setting <c>AnimatedSprite2D.Frame</c> by hand with playback
-/// stopped — so nothing depends on wall-clock time or on how fast the machine
-/// renders. Gravity is off in this project and the dice are left at rest, so no
-/// physics runs during the capture either.
+/// literal coordinates and put down on chosen faces with <c>Dice.PlaceOnFace</c>
+/// rather than rolled — the number is decided by physics now, so it cannot be
+/// requested — and the roll frames are captured by setting
+/// <c>AnimatedSprite2D.Frame</c> by hand with playback stopped. Nothing depends on
+/// wall-clock time or on how fast the machine renders. The dice also have
+/// <c>_PhysicsProcess</c> switched off for the duration, so their own state machine
+/// cannot overwrite the frames set here.
 ///
 /// Driven by capture.py; see the README in this directory. Needs a real window,
 /// because --headless has no renderer.
@@ -78,19 +80,31 @@ public partial class Capture : Node
 		if (dice.Count != Board.Length)
 			GD.PushWarning($"expected {Board.Length} dice, found {dice.Count}");
 
+		// Park the dice BEFORE moving any of them. This tool teleports dice, and a
+		// kinematic frozen body moved that way registers as a hard contact, so the
+		// collision re-roll starts clips playing behind the shot. Doing it afterwards
+		// is too late: the roll has already begun, and AnimatedSprite2D keeps
+		// advancing in _process even with _PhysicsProcess off.
+		//
+		// Switch off ContactMonitor rather than the collision layer. Zeroing the layer
+		// also hides the dice from the bounds Area2D, whose BodyExited then fires for
+		// every one of them and the out-of-bounds recovery teleports the whole board
+		// back to the spawn point.
+		foreach (Dice die in dice)
+		{
+			die.SetPhysicsProcess(false);
+			die.ContactMonitor = false;
+		}
+
 		for (int i = 0; i < dice.Count && i < Board.Length; i++)
 		{
 			Place(dice[i], Board[i].Pos);
-			dice[i].Roll(Board[i].Face);
+			// PlaceOnFace is a put-down rather than a roll: it parks the sprite on
+			// the face's resting frame and reports it, with no clip to wait out and
+			// nothing random. It runs last so it clears any state the move left.
+			dice[i].PlaceOnFace(Board[i].Face);
 		}
-
-		// Let every roll animation finish so each die settles on its forced face and
-		// the HUD receives DiceRolled. 91 frames at 30fps is ~3.1s; 300 physics ticks
-		// is 5s, comfortably past it however the frame rate wobbles.
-		await Frames(300);
-
-		foreach (Dice die in dice)
-			Place(die, die.GlobalPosition);      // kill any residual drift
+		await Frames(4);
 
 		game.GetNode<CanvasLayer>("GameUiLayer").GetNode<DicePalette>("DicePalette")
 			.SetDrawerOpen(true, false);

@@ -81,7 +81,7 @@ public partial class GameManager : Node2D
 		{
 			CancelDrag();
 			foreach (Dice die in dice)
-				die.Roll();
+				die.Throw();        // scatter them as well as animating
 			GetViewport().SetInputAsHandled();
 			return;
 		}

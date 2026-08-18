@@ -4,14 +4,42 @@ This started as a first look at Godot 4 and stopped at "the die works". The boar
 it was drawn for a board game that was never wired up. What follows is the order the
 remaining work naturally falls into, roughly cheapest-first.
 
-## 1. Make the physics decide the number
+## 1. Make the physics decide the number — partly addressed, still open
 
-The one change that would make the project honest, and the reason to come back to it. Give
-the die a real up-face, wait for angular velocity to fall below a threshold, read the face,
-*then* report. See issue 1 in [KNOWNISSUES.md](KNOWNISSUES.md).
+**Not done as written.** The number no longer comes from a bare `System.Random` draw, but it
+is still not read off the die's physical state.
 
-Worth doing with tests: the "which face is up for this orientation" function is pure, and
-is the only part of this project that would benefit from any.
+### What it does now
+
+`Dice.Roll()` takes the number from **the frame of the idle tumble the die was let go on**,
+then nudges it with a random offset (`ResultJitter`, default 2). The idle loop is 30 frames
+and covers all six faces across its length, so the moment of release picks a base face and
+the jitter decides how close to it the throw actually lands. The roll clip also **resumes
+from that same frame**, so the spin the player was watching carries into the throw instead of
+cutting to the start of a clip.
+
+The effect is that a throw can be influenced but not aimed, and the number is tied to
+something the player can see rather than to an invisible draw. It stays fair: 12,000 rolls
+sweeping the release frame evenly landed between 1,953 and 2,049 per face against an expected
+2,000. A die rolled from rest has no release frame and falls back to a plain draw.
+
+### Why the full version was reverted
+
+A complete implementation was built, tested and then deliberately removed. The problem is the
+scene: the board is seen from directly above with gravity off, so a die *sliding* across it
+would never change which face is up — screen-plane rotation cannot turn a face toward the
+camera. Making the physics decide therefore meant simulating a 3D orientation and rolling it
+forward from the distance travelled, as a cube crossing a table does.
+
+That worked, and the pure orientation maths passed nine invariant tests. It also meant the
+landing clip could not be chosen until the die stopped, which cost the six 91-frame roll
+animations most of their screen time. It was more machinery than this toy warrants, so it was
+taken out again. If it is ever wanted back, the shape of the answer is recorded here.
+
+### What is still missing
+
+The reported number has no connection to where the die physically ends up. Reading it off the
+die's real state remains the honest fix, and the note above is the reason it is not cheap.
 
 ## 2. Show the result — ✅ done, August 2026
 
