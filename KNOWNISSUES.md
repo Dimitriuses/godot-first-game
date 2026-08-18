@@ -67,41 +67,110 @@ there is no idle state for `_PhysicsProcess` to observe and act on. Rolls now st
 exactly three places: releasing a die that was being agitated, a hard enough die-to-die
 collision, and the Space key.
 
-## 4. The die tunnels through the walls on fast throws — ⚠️ needs investigation
+## 4. The die tunnels through the walls on fast throws — fixed, August 2026
 
-**This is the real bug, and the out-of-bounds handler is the mitigation for it.**
+**Fixed by one line:** `continuous_cd = 1` (`CCD_MODE_CAST_RAY`) on the `RigidBody2D` in
+`dice.tscn`. This was the first thing the old notes suggested trying, and it turned out to be
+the whole answer.
 
-Throw the die hard enough at a wall and it passes straight through instead of bouncing.
-**Corners are the weak spot** — they fail noticeably more often than a flat wall does. When
-it happens the die leaves `DiceArea`, `BodyExited` fires, and the console prints
-`Кубик вилетів за межі!`. Reproduced by hand in the editor by the project's author.
+### What was measured
 
-This is classic **tunnelling**: a fast `RigidBody2D` moves further in one physics step than
-the wall is thick, so no contact is ever generated. Things already tried:
+Dice were fired from the centre of the board at each of the four walls and the four corners,
+eight directions per speed, with the out-of-bounds recovery disabled so escapes could not be
+hidden. Counts are escapes out of 8:
 
-- **Thickening the wall colliders** — helped a little, did not fix it. The walls are already
-  ~149 px and ~141 px thick, which suggests thickness is not the limiting factor.
-- **Teleport back to spawn on exit, zeroing the velocity** — this works, and is the right
-  shape for a recovery. `OnSpawnButton` cancels `LinearVelocity` and `AngularVelocity`
-  before repositioning, which is what stops the die from immediately flying out again.
+| speed px/s | baseline | `CastRay` | `CastShape` | 120 Hz tick |
+|---|---|---|---|---|
+| 4,000 | 0 | 0 | 0 | 0 |
+| 8,000 | 3 | **0** | 3 | 0 |
+| 12,000 | 2 | **0** | 2 | 0 |
+| 16,000 | 3 | **0** | 4 | 0 |
+| 20,000 | 6 | **0** | 6 | 4 |
+| 30,000 | 7 | **0** | 7 | 5 |
 
-**Still to try**, roughly in order of promise:
+`CastRay` was then pushed further and held at **0 escapes up to 400,000 px/s** — about 33× the
+speed at which the untreated body starts leaking, and far past anything a mouse can produce.
 
-1. **Continuous collision detection.** `RigidBody2D.continuous_cd` is `CCD_MODE_DISABLED` by
-   default in Godot; setting it to `CCD_MODE_CAST_RAY` (or `CAST_SHAPE`) is the intended
-   engine-level answer to tunnelling and has not been tried here.
-2. **Cap the speed.** Clamp `LinearVelocity` on release — the drag is a pin joint, so a
-   fast flick can impart an arbitrarily large impulse with no upper bound anywhere.
-3. **Raise the physics tick rate** (`physics/common/physics_ticks_per_second`) so each step
-   advances the body less far.
-4. **Look specifically at the corners.** Four separate `CollisionShape2D` rectangles under
-   one `StaticBody2D` meet at the corners with no explicit overlap; a body arriving
-   diagonally may be threading the seam between two shapes rather than passing through
-   either one. Overlapping the rectangles, or replacing them with a single concave
-   `WorldBoundaryShape2D` ring, would test that.
+Three of those columns are worth reading carefully:
 
-The recovery itself is worth keeping either way — it is the difference between a lost die
-and a brief glitch.
+- **`CastShape` does nothing.** It is the more expensive and intuitively more thorough of the
+  two CCD modes, and in this scene it performed identically to no CCD at all. If it is ever
+  reached for, measure it first.
+- **Raising the tick rate only moves the threshold.** Doubling to 120 Hz doubles the distance
+  budget per step and buys about one speed bracket, then fails the same way. It is not a fix.
+- **Normal play is unchanged.** The same firm throw travels to x=1076 — exactly the wall
+  contact point, 1108.5 minus the 32 px collider — and comes to rest at (1074, 545) with or
+  without CCD, to the pixel.
+
+### Two of the old hypotheses were wrong
+
+- **It was not the corner seams.** The old note suspected that four separate wall rectangles
+  meeting with no overlap let a diagonal approach thread between two shapes. Computing the
+  slabs from the committed scene shows **all four corners overlap**, so there is no seam to
+  thread. Whether they always did or whether a later wall repositioning closed them, the
+  hypothesis does not hold now.
+- **Geometry under-predicted the onset.** A 32 px circle against a 149 px slab has a 213 px
+  detection band, which at 60 Hz predicts leaking above ~12,780 px/s. Escapes actually start
+  at **8,000 px/s**, so the practical threshold is lower and more reachable than the arithmetic
+  suggests. Worth remembering before trusting a similar calculation elsewhere.
+
+### What this does not change
+
+The teleport-and-zero-velocity recovery stays. With CCD on it never fires — measured at 0
+across 8,000 to 60,000 px/s with the handler enabled — but it costs nothing idle and it is the
+difference between a lost die and a brief glitch if anything ever does get out.
+
+Release velocity is still unclamped. `dragVelocity` is `(mouse - lastMousePosition) / delta`
+with no upper bound, so a fast flick can still impart an arbitrarily large impulse; CCD simply
+means the die now bounces off the wall instead of leaving through it. Clamping it is a
+question about how a throw should *feel*, not a correctness fix any more.
+
+### 4b. The drag itself could push dice out — fixed, August 2026
+
+Two ways, both reported from play and both since measured:
+
+- **The pin joint chased the cursor off the board.** `MousePin.GlobalPosition` was set to the
+  raw mouse position, so moving the cursor past a wall hauled the die into it and the solver
+  fought back hard enough to squeeze it out — worst in the bottom-right corner, where two
+  walls push at once. Measured with the cursor held 1,300px past the corner: the die reached
+  **421px past the wall face.**
+- **Shift-dragging was noclip.** The group drag froze each body and assigned `GlobalPosition`
+  directly. A frozen body moved that way ignores walls and other dice completely, so the whole
+  selection walked straight out of the board.
+
+The fixes:
+
+- `GameManager` now works out the playable rectangle **from the wall colliders themselves**
+  (`ComputeBoardBounds`, exposed as `BoardBounds`) rather than from hardcoded numbers, so
+  nudging a wall in the editor moves the drag limit with it. It reads back as
+  x 40.5–1108.5, y 64.5–626.5.
+- The pin is clamped into that rectangle, inset by the die's collider radius and corrected for
+  the collider's `(1, 12)` offset. The cursor may leave the board; the pin may not. Measured
+  again: **0.00px past the wall face**, resting against it.
+- The group drag no longer freezes anything. Each die is **steered by velocity**, so walls and
+  the other dice actually stop it instead of being passed through.
+- It also **stops preserving the arrangement the dice were picked up in.** Holding the original
+  offsets meant that with the cursor past a wall every die was fighting to reach a slot inside
+  that wall, and the pile visibly strained against it. Dice are now simply gathered to the
+  cursor, into a clump whose radius grows with the square root of the count, and once a die is
+  inside the clump it stops being pushed at all and settles against its neighbours. Measured
+  against the formation-holding version, crushing three dice into a corner improved on every
+  count: worst overshoot 24.8px → **14.4px**, resting gaps 37/53/44px → **62/44/59px** (free
+  dice sit 59px apart), and peak speed once settled **0px/s** instead of continuous shoving.
+
+This is also what finally made `Dice.CollisionShape` earn its keep; it was listed under
+*Smaller things* as an `[Export]` nothing read. `CollisionRadius` and `CollisionOffset` are
+read off it now.
+
+**One residual, deliberately accepted.** Steering by setting `LinearVelocity` overrides the
+contact solver's response, so a die crushed between another die and a wall can be extruded
+past the face. A containment step puts it back each frame, holding the worst case to
+**14.4px under a sustained three-die squeeze into a corner with the cursor held far
+off-board** — bounded, cosmetic, and nowhere near the 181px needed to leave through a
+149px wall. Lowering `MaxDragSpeed` does not reliably help: sweeping it gave 8.7 / 14.4 / 8.7 /
+2.4px at 4000 / 2000 / 1000 / 500px per second, so it was left at 4000 for responsiveness.
+Steering with forces instead was tried and is worse — 461px of lag behind a 900px/s cursor,
+and unstable at high gain.
 
 ### 4a. A separate, smaller bug in the same handler
 
@@ -148,8 +217,9 @@ alone.
   spinning die therefore orbited a point 12 px below its own origin, measured at 24 px of
   wander with no linear velocity at all. Pinning `center_of_mass` to `(0, 0)` fixed it; the
   same measurement now reads 0.
-- **`Dice.CollisionShape`** is an `[Export]` that nothing reads — it survives from a
-  disable-collision-while-rolling idea that was commented out.
+- ~~**`Dice.CollisionShape`** is an `[Export]` that nothing reads.~~ It does now: `Dice`
+  exposes `CollisionRadius` and `CollisionOffset` off it, and `GameManager` uses both to work
+  out how far a dragged die may travel before it touches a wall (issue 4b).
 - **`Dice.GetResult()`** supplies each newly registered die's initial HUD value.
 - ~~**Console output is Ukrainian**~~ while identifiers are English. No longer true: there is
   no non-ASCII text left in `scripts/`, and the single remaining `GD.Print` is

@@ -115,20 +115,29 @@ old frames came out of a GIF and had binary alpha.
 Moved to item 8 below, and no longer described as "the cheap part" — measuring it changed the
 picture.
 
-## 7. Stop the die tunnelling through the walls — investigation
+## 7. Stop the die tunnelling through the walls — ✅ done, August 2026
 
-Thrown hard enough, especially into a corner, the die passes through a wall instead of
-bouncing. Thickening the wall colliders was tried and barely helped. The teleport-and-zero-
-velocity recovery works and should stay, but it is a safety net, not a fix.
+One line: `continuous_cd = 1` (`CCD_MODE_CAST_RAY`) on the `RigidBody2D` in `dice.tscn`. It was
+the first thing this item suggested trying and it was the whole answer.
 
-Next things to try, in order: enable `continuous_cd` on the `RigidBody2D` (off by default,
-and the engine's intended answer to tunnelling); clamp release velocity so a flick cannot
-impart an unbounded impulse; raise the physics tick rate; and look hard at the corners
-specifically, where four separate collision rectangles meet with no overlap and a diagonal
-approach may be threading the seam between two shapes rather than passing through either.
+Measured by firing dice at all four walls and all four corners with the recovery disabled:
+the untreated body starts leaking at **8,000 px/s** and is losing 7 of 8 throws by 30,000.
+With `CastRay` it is **0 escapes at every speed up to 400,000 px/s**, and ordinary play is
+unchanged to the pixel — the same throw reaches the same wall contact point and rests in the
+same place with CCD on or off.
 
-Full detail and what has already been ruled out is in [KNOWNISSUES.md](KNOWNISSUES.md),
-issue 4.
+Three findings worth keeping, since they contradict what this item assumed:
+
+- **`CastShape` does nothing here.** The more expensive CCD mode measured identically to no CCD
+  at all. Measure before reaching for it.
+- **Raising the tick rate is not a fix.** 120 Hz buys about one speed bracket, then fails the
+  same way.
+- **The corner-seam theory was wrong.** Computing the wall slabs from the committed scene shows
+  all four corners overlap, so there was never a seam to thread.
+
+The teleport-and-zero-velocity recovery stays, and now never fires. Release velocity is still
+unclamped, which is a question about feel rather than correctness. Full numbers in
+[KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
 ## 8. Add the rest of the dice from the pack — planned, not started
 

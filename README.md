@@ -113,11 +113,16 @@ Everything here was reproduced by running the project, not inferred from reading
   held**, so a free die is never left in an idle state for anything to observe and act on.
   Rolls start from exactly three places: releasing a die you spun, a hard enough die-to-die
   collision, and Space.
-- **The die tunnels through the walls on fast throws**, and corners are noticeably the worst
-  spot. Thickening the wall colliders barely helped; continuous collision detection
-  (`continuous_cd`, off by default in Godot) has not been tried yet. The out-of-bounds
-  handler that teleports the die back and zeroes its velocity is the mitigation, and it
-  works. Under investigation — see `KNOWNISSUES.md`.
+- ~~**The die tunnels through the walls on fast throws.**~~ Fixed in August 2026 by enabling
+  continuous collision detection (`continuous_cd`, off by default in Godot). Measured: dice
+  started escaping at 8,000 px/s and now survive 400,000 px/s, with ordinary throws unchanged
+  to the pixel. The out-of-bounds recovery stays, and no longer has anything to recover from.
+- ~~**Dragging could push dice out of the board.**~~ Fixed at the same time. The mouse pin is
+  clamped to the playable rectangle, which is derived from the wall colliders rather than
+  hardcoded, so a cursor dragged off-board leaves the die resting against the wall instead of
+  hauling it 421px through. Shift-dragging no longer freezes and teleports dice either — they
+  are steered, and gathered into a clump at the cursor rather than holding the arrangement
+  they were picked up in, so a pile against a wall settles instead of straining to get out.
 - **`BodyExited` still fires once during scene teardown**, on the same frame as `_ExitTree`,
   where the deferred recentre can never be flushed. It is now silent — the handler prints
   nothing, so it no longer muddies the console — but the event is still unguarded.

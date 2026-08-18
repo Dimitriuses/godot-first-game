@@ -156,6 +156,13 @@ why. Do not rebuild it without reading that first.
   `(1, 12)` made it spin about a point 12 px off its origin and wander 24 px while turning on
   the spot. `dice.tscn` now pins `center_of_mass` to `(0, 0)`. Offsetting a shape to line it
   up with artwork is fine; just pin the centre of mass when you do.
+- **Setting `LinearVelocity` every frame overrides the contact solver.** It is how the group
+  drag steers dice, and it works, but a body squeezed between another body and a wall gets
+  extruded through: the command wins over the separation impulse. `GameManager` clamps
+  positions back inside afterwards as a backstop. Steering with forces avoids the problem and
+  tracks far too slowly to use — measured at 461px of lag.
+- **Never move a die by assigning `GlobalPosition` while it is frozen.** That is noclip: it
+  passes through walls and other dice. It is what the Shift group drag used to do.
 - **Do not zero a die's `CollisionLayer` to quiet it.** The bounds `Area2D` finds bodies by
   layer, so clearing it makes `BodyExited` fire and the out-of-bounds recovery teleports every
   die back to the spawn point. Turn off `ContactMonitor` instead.

@@ -4308,6 +4308,7 @@ physics_material_override = SubResource("PhysicsMaterial_dicg2")
 gravity_scale = 0.0
 center_of_mass_mode = 1
 freeze_mode = 1
+continuous_cd = 1
 linear_damp = 1.5
 script = ExtResource("1_dicg2")
 AnimatedSprite = NodePath("AnimatedSprite2D")

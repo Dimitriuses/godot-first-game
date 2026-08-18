@@ -61,6 +61,14 @@ public partial class Dice : RigidBody2D
 	public bool IsRolling => isRolling;
 	public int GetResult() => currentResult;
 
+	/// Radius of the die's collider, and where that collider sits relative to the body
+	/// origin — it is deliberately offset to line up with the drawn die. GameManager
+	/// reads both to work out how far a dragged die may go before it touches a wall.
+	public float CollisionRadius =>
+		CollisionShape?.Shape is CircleShape2D circle ? circle.Radius : 32f;
+
+	public Vector2 CollisionOffset => CollisionShape?.Position ?? Vector2.Zero;
+
 	[Signal]
 	public delegate void DiceRolledEventHandler(int result);
 
