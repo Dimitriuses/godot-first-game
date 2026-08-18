@@ -181,7 +181,7 @@ public partial class GameManager : Node2D
 		ClearDragState();
 	}
 
-	private void SpawnDie(Vector2 screenPosition)
+	public void SpawnDie(Vector2 screenPosition)
 	{
 		if (DiceScene == null)
 			return;

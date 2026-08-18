@@ -93,7 +93,8 @@ assets/     dice/            die animation frames  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
 tools/      dice-render/     offline Blender pipeline that produces assets/dice/
-docs/       screenshot, GIF, asset provenance
+            screenshots/     regenerates the two images below, deterministically
+docs/       screenshot.png and roll.gif (both generated), asset provenance
 ```
 
 The gameplay and runtime UI are implemented in C#.

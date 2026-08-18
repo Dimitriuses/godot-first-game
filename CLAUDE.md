@@ -131,6 +131,23 @@ covered. Click and fling by hand once before calling a drag change done.
 - **`PhysicsServer2D.BodySetState` needs the freeze/unfreeze dance around it** or it silently
   does nothing on a resting body. This is measured, not superstition — KNOWNISSUES 5.
 
+## Regenerating the README images
+
+`docs/screenshot.png` and `docs/roll.gif` are **generated, not hand-captured** — they used to
+drift out of date every time the scene changed:
+
+```sh
+python tools/screenshots/capture.py
+```
+
+Two runs produce byte-identical files. A Godot window opens for a few seconds, because
+`--headless` has no renderer. Details and the tuning constants are in
+[tools/screenshots/README.md](tools/screenshots/README.md).
+
+**Re-run it after any change that alters what the game looks like** — new UI, moved nodes,
+different dice artwork. It is a few seconds and it is the only thing keeping the README
+honest.
+
 ## Regenerating the die artwork
 
 `assets/dice/` is generated, not hand-drawn. The Blender pipeline lives in

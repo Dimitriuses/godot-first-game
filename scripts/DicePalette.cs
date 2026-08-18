@@ -165,7 +165,7 @@ public partial class DicePalette : Control
 		GetViewport().SetInputAsHandled();
 	}
 
-	private void SetDrawerOpen(bool open, bool animate)
+	public void SetDrawerOpen(bool open, bool animate)
 	{
 		isOpen = open;
 		float panelLeft = open ? -DrawerWidth : 0f;

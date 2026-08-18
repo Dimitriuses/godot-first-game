@@ -8,12 +8,12 @@ Nothing here runs as part of the game or the build. It is offline art tooling.
 
 ## Source
 
-`references/Dice D20 D12 D8 D10 D8 D6 D4/` — Blend Swap blend #82440, CC0 1.0, licence
+`assets/Dice D20 D12 D8 D10 D8 D6 D4/` — Blend Swap blend #82440, CC0 1.0, licence
 page included in the download. See [`../../docs/ASSETS.md`](../../docs/ASSETS.md).
 
-The `.blend` and the download `.zip` are **gitignored** (~22 MB together); the licence page
-that ships with them is committed, as the record of the grant. Download the blend again from
-Blend Swap #82440 if you need to re-run this.
+The `.blend` is **gitignored** (17 MB); the licence page that ships with it is committed, as
+the record of the grant. Download the blend again from Blend Swap #82440 if you need to
+re-run this.
 
 ## Running it
 

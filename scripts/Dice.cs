@@ -147,12 +147,17 @@ public partial class Dice : RigidBody2D
 
 	// ------------------------------------------------------------------- rolling
 
-	public void Roll()
+	/// <param name="forced">
+	/// 1-6 to land on a chosen face instead of a random one. Used by the screenshot
+	/// tool in tools/screenshots so the generated images are reproducible; 0, the
+	/// default, rolls normally.
+	/// </param>
+	public void Roll(int forced = 0)
 	{
 		if (isRolling)
 			return;
 
-		currentResult = Random.Shared.Next(1, 7);
+		currentResult = forced is >= 1 and <= 6 ? forced : Random.Shared.Next(1, 7);
 		ClearHeld();
 		isRolling = true;
 

@@ -149,7 +149,7 @@ public partial class DiceHud : Control
 		totalButton.Text = $"Total: {total}";
 	}
 
-	private void SetOpen(bool open, bool animate)
+	public void SetOpen(bool open, bool animate)
 	{
 		isOpen = open;
 		float top = open ? -330f : 0f;

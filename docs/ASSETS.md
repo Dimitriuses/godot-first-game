@@ -43,7 +43,7 @@ total) were **rendered for this repository in August 2026** from a public-domain
 The source is **Blend Swap blend #82440, "Dices (D20, D12, D8, D10, D8, D6, D4)"**, released
 under [Creative Commons Zero 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The
 licence page as published by Blend Swap ships with the download and is kept alongside the
-model in `references/`:
+model in `assets/Dice D20 D12 D8 D10 D8 D6 D4/`:
 
 > You are free to use this asset privately for any use you see fit. If you choose to
 > distribute copies or modified versions of this asset you must do so under the following
