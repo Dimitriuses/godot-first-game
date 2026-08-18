@@ -31,7 +31,7 @@ is the single change that would turn this from a toy into a dice roller.
 references it — the only `GetNode` call in `GameManager` fetches the die. The result goes to
 `GD.Print`, which is invisible in an exported build.
 
-## 3. The die can roll itself
+## 3. The die can roll itself — fixed
 
 `Dice._PhysicsProcess`:
 
@@ -43,8 +43,15 @@ else if (!isDragging && AnimatedSprite.IsPlaying()
 }
 ```
 
-Any frame in which an idle animation is playing and the die is not held starts a new roll.
-The player is not required.
+This transition was removed, and with it the whole class of bug: `Dice` is now a three-state
+machine (resting on one static frame / held and looping an idle / playing a roll clip) whose
+transitions all set the sprite explicitly.
+
+The rule that makes self-rolling impossible is that **`idle0` and `idle1` play only while the
+die is held.** A free die is either playing a numbered clip or parked on a single frame, so
+there is no idle state for `_PhysicsProcess` to observe and act on. Rolls now start from
+exactly three places: releasing a die that was being agitated, a hard enough die-to-die
+collision, and the Space key.
 
 ## 4. The die tunnels through the walls on fast throws — ⚠️ needs investigation
 
@@ -119,11 +126,10 @@ alone.
 
 ## 6. Smaller things
 
-- **`CollisionShape2D` is scaled 6×** in `dice.tscn` instead of being authored at its
-  intended radius. Godot advises against scaling collision shapes.
+- ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed with an unscaled 32 px-radius shape.
 - **`Dice.CollisionShape`** is an `[Export]` that nothing reads — it survives from a
   disable-collision-while-rolling idea that was commented out.
-- **`Dice.GetResult()`** is public and called by nothing.
+- **`Dice.GetResult()`** supplies each newly registered die's initial HUD value.
 - **Console output is Ukrainian** while identifiers are English.
 - **The export preset uses `export_filter="all_resources"`**, so every file under `assets/`
   ships in the binary whether a scene uses it or not. That was 12.8 MB of unreferenced

@@ -1,5 +1,4 @@
 using Godot;
-using System;
 using System.Collections.Generic;
 
 public partial class GameManager : Node2D
@@ -57,21 +56,24 @@ public partial class GameManager : Node2D
 		Vector2 mouse = GetGlobalMousePosition();
 		MousePin.GlobalPosition = mouse;
 
-		if (isGroupDragging)
+		if (isDragging)
 		{
 			dragVelocity = delta > 0 ? (mouse - lastMousePosition) / (float)delta : Vector2.Zero;
 			lastMousePosition = mouse;
-			foreach (Dice die in selectedDice)
-				die.GlobalPosition = mouse + groupDragOffsets[die];
+			if (isGroupDragging)
+				foreach (Dice die in selectedDice)
+					if (groupDragOffsets.TryGetValue(die, out Vector2 offset))
+						die.GlobalPosition = mouse + offset;
 		}
 	}
 
-	public override void _UnhandledInput(InputEvent @event)
+	public override void _Input(InputEvent @event)
 	{
 		if (@event is InputEventKey shiftKey && shiftKey.Keycode == Key.Shift
 			&& shiftKey.Pressed && !shiftKey.Echo)
 		{
-			SelectAll();
+			if (!isDragging)        // re-selecting mid-drag would strand the offsets
+				SelectAll();
 			return;
 		}
 
@@ -143,7 +145,7 @@ public partial class GameManager : Node2D
 		if (selectedDice.Count == 1)
 		{
 			MousePin.NodeB = MousePin.GetPathTo(clickedDie);
-			clickedDie.isDragging = true;
+			clickedDie.StartDragging();
 			clickedDie.AngularDamp = 10;
 			return;
 		}
@@ -153,7 +155,7 @@ public partial class GameManager : Node2D
 		foreach (Dice die in selectedDice)
 		{
 			groupDragOffsets[die] = die.GlobalPosition - mouse;
-			die.isDragging = true;
+			die.StartDragging();
 			die.Freeze = true;
 		}
 	}
@@ -166,17 +168,14 @@ public partial class GameManager : Node2D
 			{
 				die.Freeze = false;
 				die.LinearVelocity = dragVelocity;
-				die.AngularVelocity = (float)Random.Shared.NextDouble() * 8f - 4f;
-				die.isDragging = false;
-				die.Roll();
+				die.ReleaseFromDrag(dragVelocity.Length());
 			}
 		}
 		else if (draggedDie != null)
 		{
-			MousePin.NodeB = new NodePath();
-			draggedDie.isDragging = false;
-			draggedDie.AngularDamp = 0;
-			draggedDie.Roll();
+			float releaseSpeed = draggedDie.LinearVelocity.Length();
+			EndSingleDrag();
+			draggedDie.ReleaseFromDrag(releaseSpeed);
 		}
 
 		ClearDragState();
@@ -226,18 +225,26 @@ public partial class GameManager : Node2D
 		PhysicsServer2D.BodySetState(die.GetRid(), PhysicsServer2D.BodyState.Transform,
 			new Transform2D(0, position));
 		die.Freeze = false;
-		die.isDragging = false;
+		die.CancelDragging();
+	}
+
+	/// Detach the mouse pin and undo the extra damping the single drag applies.
+	private void EndSingleDrag()
+	{
+		MousePin.NodeB = new NodePath();
+		if (draggedDie != null && IsInstanceValid(draggedDie))
+			draggedDie.AngularDamp = 0;
 	}
 
 	private void CancelDrag()
 	{
 		if (!isDragging)
 			return;
-		MousePin.NodeB = new NodePath();
+		EndSingleDrag();
 		foreach (Dice die in selectedDice)
 		{
 			die.Freeze = false;
-			die.isDragging = false;
+			die.CancelDragging();
 		}
 		ClearDragState();
 	}

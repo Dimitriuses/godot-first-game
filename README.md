@@ -18,7 +18,7 @@ they tumble, land, and report a number. My first project in **Godot 4**, written
 | **Tab** or **right-edge arrow** | open or close the dice palette |
 | **Drag D6 from the palette** | add another die to the board |
 | **Left-click and drag the die** | grab it — a pin joint follows the cursor, so you can fling or spin it |
-| **Release the left button** | let go and roll |
+| **Release the left button** | roll only if the die was spun or released above its configured speed threshold |
 | **Hold Shift, then drag a die** | select and throw every die together |
 | **Space** | roll every die once, simultaneously |
 | **Total button** | open or close the bottom-left die list |
@@ -103,9 +103,8 @@ Everything here was reproduced by running the project, not inferred from reading
   `System.Random` is a slot machine with extra steps.
 - **The result is invisible in-game.** The `Label` in `game.tscn` is never written to; the
   only output is `GD.Print`.
-- **The die can re-roll itself.** `_PhysicsProcess` calls `Roll()` whenever an idle
-  animation is playing and the die is not being dragged, so a roll can start without the
-  player doing anything.
+- ~~**The die can re-roll itself.**~~ Fixed: idle animations now return to the settled face
+  when motion stops, and only explicit throws or sufficiently strong die collisions roll.
 - **The die tunnels through the walls on fast throws**, and corners are noticeably the worst
   spot. Thickening the wall colliders barely helped; continuous collision detection
   (`continuous_cd`, off by default in Godot) has not been tried yet. The out-of-bounds
@@ -120,8 +119,8 @@ Everything here was reproduced by running the project, not inferred from reading
 - **The board game was never built.** `Player.cs` is not instantiated by anything.
 - **No tests, no CI.** The engine-facing gameplay code is currently verified manually.
 - **Console output is in Ukrainian**, mixed with English identifiers.
-- **`CollisionShape2D` is scaled 6×** in `dice.tscn` rather than being authored at its real
-  size — something Godot explicitly advises against.
+- ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed: the die now uses an unscaled 32 px-radius
+  collider that follows the visible body more closely.
 - ~~**The die artwork is third-party with unknown terms.**~~ Fixed in August 2026: the
   animation was re-rendered from a CC0 model and is now 3.9 MB instead of 18.6 MB — see
   [docs/ASSETS.md](docs/ASSETS.md).
