@@ -39,10 +39,10 @@ There is no score and no way to lose. It is a toy, not a game.
 run of `game.tscn` starts clean with no errors or warnings. The dice state machine was
 checked by 20 assertions driven headlessly — see [CLAUDE.md](CLAUDE.md).
 
-It is also **unfinished, and finished-looking in a misleading way.** The board is a board
-game's board, and there is a `Player` script and a ring of eight cell coordinates in the
-history to prove that was the plan — but nothing ever moves around it. What exists is the
-die.
+It is **a dice sandbox and nothing more**, by decision rather than by omission. The board art
+is a board game's board, and a `Player` script and a ring of eight cell coordinates survive in
+the history to prove that was once the plan — but that plan was dropped in August 2026. Throw
+dice, watch them tumble, read the numbers. See [ROADMAP.md](ROADMAP.md) items 3 and 4.
 
 **The number is no longer a bare random draw**, though it is not physical either. It is
 taken from the frame of the tumble the die was let go on, nudged by a random factor: the idle
@@ -86,7 +86,7 @@ scripts/    GameManager.cs   drag/release, respawn, bounds handling
             Dice.cs          roll result + face animations
             DicePalette.cs   right-side drag-to-spawn dice menu
             DiceHud.cs       sorted die values, total and deletion controls
-            Player.cs        board-piece stub, not instantiated
+            Player.cs        board-piece stub, unused (board game dropped)
 assets/     dice/            die animation frames  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
@@ -121,7 +121,8 @@ Everything here was reproduced by running the project, not inferred from reading
   nothing, so it no longer muddies the console — but the event is still unguarded.
 - **Nothing moves until you touch it.** Gravity is disabled (top-down board), so the opening
   scene is completely static: 1,800 consecutive rendered frames are byte-identical.
-- **The board game was never built.** `Player.cs` is not instantiated by anything.
+- **The board game was dropped**, so `Player.cs`, `scenes/Player.tscn` and the two Kenney
+  piece sprites are dead weight kept for now. See [ROADMAP.md](ROADMAP.md) item 3.
 - **No tests, no CI.** Nothing is committed. Each change to the die has been verified with a
   throwaway headless harness — 21 checks on the current build — that is then deleted. The
   recipe is in [CLAUDE.md](CLAUDE.md), and making it permanent is the cheapest real
@@ -134,8 +135,9 @@ Everything here was reproduced by running the project, not inferred from reading
   animation was re-rendered from a CC0 model and is now 3.9 MB instead of 18.6 MB — see
   [docs/ASSETS.md](docs/ASSETS.md).
 
-`KNOWNISSUES.md` carries the same list with the measurements; `ROADMAP.md` records what the
-project was heading towards.
+`KNOWNISSUES.md` carries the same list with the measurements; `ROADMAP.md` records where the
+project is heading — chiefly item 8, adding the rest of the dice from the source pack, which
+turns out to be a size problem rather than an art problem.
 
 ## History
 

@@ -1,8 +1,10 @@
 # Roadmap
 
 This started as a first look at Godot 4 and stopped at "the die works". The board underneath
-it was drawn for a board game that was never wired up. What follows is the order the
-remaining work naturally falls into, roughly cheapest-first.
+it was drawn for a board game that was never wired up — and **as of August 2026 it never will
+be.** The project is a dice-rolling sandbox: throw dice, watch them tumble, read the numbers.
+No players, no turns, no win condition. Items 3 and 4 are dropped for that reason, and the
+main piece of work left is item 8, adding the rest of the dice from the source pack.
 
 ## 1. Make the physics decide the number — partly addressed, still open
 
@@ -57,29 +59,29 @@ Still missing, and worth a follow-up: the value shown is the one `Dice.Roll()` d
 `System.Random`, not one read off the die. Item 1 is what makes the number mean anything;
 this item only makes it visible.
 
-## 3. Finish the board game the board implies
+## 3. ~~Finish the board game the board implies~~ — dropped, August 2026
 
-The scaffolding that survives from the original attempt:
+**Decided against.** The board art implies a game, and the scaffolding for one survives, but
+building it would turn a dice sandbox into a different project. The dice are the interesting
+part and the part that works; a ring of cells and a token moving round it adds rules without
+adding anything to look at.
 
-- `scripts/Player.cs` — a `Node2D` with a `CellIndex` and a `MoveToCell(Vector2)`. Never
+What is still in the tree because of this, and can now be deleted whenever someone wants to:
+
+- `scripts/Player.cs` — a `Node2D` with a `CellIndex` and a `MoveToCell(Vector2)`, never
   instantiated by anything.
 - `scenes/Player.tscn` — the piece, using a Kenney black playing piece.
-- Removed in the July 2026 cleanup but preserved in `v0.1-original`: a `cellPositions`
-  array of eight `Vector2`s in `GameManager`, and the commented-out `_Ready` block that
-  would have spawned the player onto `cellPositions[0]`.
+- `assets/kenney-boardgame/piece-black-border04.png`, used only by that scene, and
+  `chip-red-white.png`, now used by nothing at all.
 
-Worth knowing before reusing that array: **its coordinates do not match the board that
-exists.** The eight cells form a ring inside a 100–300 px box, while the drawn board spans
-roughly 1150 × 670 px. They are placeholders from an earlier prototype, not measurements of
-the tilemap.
+Preserved in `v0.1-original` and not worth restoring: a `cellPositions` array of eight
+`Vector2`s in `GameManager` and a commented-out `_Ready` block that would have spawned the
+player on the first cell. Its coordinates never matched the drawn board anyway — the eight
+cells form a ring inside a 100–300 px box, while the board spans roughly 1150 × 670 px.
 
-So the work is: lay out real cell coordinates against `TileMapLayer`, instantiate the
-player, move it by the rolled number, and decide what happens when it lands.
+## 4. ~~Turn order and a second player~~ — dropped with item 3
 
-## 4. Turn order and a second player
-
-Nothing here is written. `Player` has no concept of ownership and `GameManager` tracks no
-turn.
+Nothing was ever written for it, and with no board game there is nothing for it to sequence.
 
 ## 5. A browser demo — blocked, and not by laziness
 
@@ -117,15 +119,10 @@ The resolution problem went with it: 128 px cells drawn at 1:1 instead of 512 px
 at 128 px. **3.9 MB instead of 18.6 MB**, and genuinely antialiased for the first time — the
 old frames came out of a GIF and had binary alpha.
 
-### 6b. The other dice — the cheap part now
+### 6b. The other dice
 
-The CC0 pack also contains a D4, D8, D10, D10-percentile, D12, D20 and a numbered D6, all
-manifold and all under the same terms, and the whole render pipeline is parameterised by
-which object it points at. Adding them is mostly deciding what the *game* does with a d20:
-`Dice.Roll()` hardcodes `Random.Shared.Next(1, 7)`, `dice.tscn` names its animations
-`"1"`…`"6"`, and `DicePalette` offers exactly one die type to drag out. Worth doing **after**
-item 1 — once the physics decides the number, "which face is up" generalises to any solid,
-and adding dice becomes a data change rather than six more hardcoded animations.
+Moved to item 8 below, and no longer described as "the cheap part" — measuring it changed the
+picture.
 
 ## 7. Stop the die tunnelling through the walls — investigation
 
@@ -141,3 +138,130 @@ approach may be threading the seam between two shapes rather than passing throug
 
 Full detail and what has already been ruled out is in [KNOWNISSUES.md](KNOWNISSUES.md),
 issue 4.
+
+## 8. Add the rest of the dice from the pack — planned, not started
+
+The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
+solids, of which one is done:
+
+| Object | Faces | State |
+|---|---|---|
+| `D6 Dotted` | 6 | **done** — this is the die in the game |
+| `D4` | 4 | not started |
+| `D6 Numbered` | 6 | not started |
+| `D8` | 8 | not started |
+| `D10` | 10 | not started |
+| `D10 Percentile` | 10 | not started, and needs its own value handling |
+| `D12` | 12 | not started |
+| `D20` | 20 | not started |
+
+**76 faces in total.** That number is the whole problem, so start there.
+
+### 8a. The blocker: 76 faces will not fit in this repository
+
+Measured from what is already committed: one d6 is **3.61 MB** across 8 sheets, which is
+~6.0 KB per landing frame and ~7.2 KB per idle frame at 128 px cells. Extending the current
+architecture — one 91-frame landing clip per face, two 30-frame idle loops per die type —
+gives:
+
+| | frames | size |
+|---|---|---|
+| 76 landing clips | 6,916 | 40.4 MB |
+| 16 idle loops | 480 | 3.4 MB |
+| **total** | **7,396** | **43.8 MB** |
+
+That is **12× the current 3.61 MB**, in PNGs, in git forever. It would also
+mean ~7,400 `AtlasTexture` sub-resources against the 606 in `dice.tscn` today. Render cost is
+*not* the problem — roughly an hour of Blender plus half an hour of compositing, once.
+
+**The obvious saving does not work.** The plausible fix is to share the fast opening frames
+between the faces of one die, since a die blurred beyond recognition should look the same
+whichever face it will land on. Measuring the six committed clips says otherwise: they differ
+*most* at frame 0 (mean abs difference 47) and converge steadily to the end (2.2 at frame 90).
+That is because `FACE` in `render.py` gives every face its own turn count, tumble axis and
+drift, deliberately, so the six throws do not read as the same clip. They are six different
+throws that happen to end differently, not one throw with six endings.
+
+Sharing is therefore still possible but is **not free**: it needs the per-face variation
+removed so that all faces of a die share one tumble and diverge only as the spin decays,
+which means re-rendering the d6 as well and giving up some of the variety. The crossover
+frame would then have to be measured rather than guessed — the same diff, run against the
+re-rendered clips.
+
+**This decision comes before any rendering.** Options, roughly:
+
+1. **Ship a subset.** A d6 and a d20 is what most people actually want; 26 faces is ~15 MB.
+2. **Share the tumble.** Re-render everything with one throw per die type, per-face only
+   after the spin decays. Perhaps half the size, at the cost of variety.
+3. **Shorten the clips.** The landing carries the weight; the long entry does not.
+4. **Generate on demand.** Do not commit the sheets. Breaks clone-and-run, needs Blender.
+5. **Accept ~44 MB.** Honest, and undoes the 2026 cleanup that took the repo from 2,741 files
+   to 43 and the die art from 18.6 MB to 3.9 MB.
+
+### 8b. Which numeral is on which face cannot be derived
+
+The d6 was tractable because its faces carry *pips*: `pip_masks()` counts connected clusters
+of recessed geometry and gets 1–6 for free, with opposite faces summing to 7 as a check.
+Every other die in the pack is alphanumeric. You cannot count a glyph.
+
+The good news is that the recessed-vertex trick still applies — the numerals are indented
+exactly as the pips are, so the existing `DotMask` approach should colour them without
+change. What is missing is only the mapping from face to value.
+
+Proposed, and cheap: render every face flat-on into one indexed contact sheet, read it once
+by eye, and commit the table beside the pipeline. Eight tables, 76 entries, done once. Watch
+for the **6/9 ambiguity** — dice normally disambiguate with an underline or a full stop, and
+whichever this model uses has to be recorded so the table is not silently wrong by two faces.
+
+### 8c. The pipeline assumes a cube
+
+`tools/dice-render/render.py` is written for an axis-aligned six-faced solid:
+
+- `pip_masks()` classifies vertices by which of the six axis directions they face (`AXES`).
+- `rest_quat()` looks up one of six axis-aligned Euler rotations.
+
+Both need replacing with something that works off arbitrary face normals: group the mesh's
+polygons into planes, take each plane's normal, and build `Quaternion(normal, +Z)` to present
+that face to the camera. The camera, toon material, motion-blur accumulation and compositing
+stages are all shape-agnostic and carry over untouched.
+
+Two quirks to plan for:
+
+- **The d4 has no up-face.** It rests on a face and the value is read at the apex, so
+  "present value *v* to the camera" is a different construction from the other dice.
+- **The percentile d10 shows 00–90**, not 1–10, so its animation names and its HUD value
+  need a display concept the code does not currently have.
+
+### 8d. Code that hardcodes six
+
+Small and mechanical, but it is real work:
+
+- `Dice.cs` — `WrapFace` is `% 6`, `ChooseResult` maps the release frame onto `* 6 /
+  idleLength`, and `PlaceOnFace` bounds-checks `< 1 or > 6`. All need a face count, either
+  exported or counted from the numeric animations in `SpriteFrames`.
+- `GameManager.DiceScene` is a single `PackedScene`; it needs one per die type.
+- `DicePalette` offers exactly one entry, `AddDieOption(list, "D6", ...)`, and one generated
+  icon. It needs an entry and an icon per type.
+- `DiceHud` labels dice `D{Id}` where `Id` is a sequence number, which collides confusingly
+  with d6/d20 notation the moment there is more than one type. Rename before adding dice, not
+  after. Its **Total** also needs a decision once a percentile d10 is in the mix.
+
+### 8e. `dice.tscn` has to be generated
+
+The scene holds 606 `AtlasTexture` sub-resources written out one per frame. A d20 alone would
+need about 2,000, and the set about 7,400. Nobody maintains that by hand, and the existing
+`retarget_tscn.py` only rescales what is already there.
+
+A generator that writes a die scene from a directory of sheets is a **prerequisite**, not
+cleanup afterwards. `tools/dice-render/validate.py` already checks a scene's regions against
+the PNGs on disk and generalises to whatever the generator emits.
+
+### Suggested order
+
+1. Decide 8a. Nothing else is worth doing until the size question has an answer.
+2. Write the scene generator (8e) and point `validate.py` at its output.
+3. Generalise the geometry (8c) and prove it on `D6 Numbered` — six faces, known answers,
+   directly comparable against the die already shipping.
+4. Build the face-to-value tables (8b).
+5. Generalise the code (8d), with the `DiceHud` rename first.
+6. Render whichever dice 8a settled on.

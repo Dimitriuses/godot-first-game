@@ -13,9 +13,10 @@ where it came from, and how that was established — by measurement where possib
 | `piece-black-border04.png` | same pack | `scenes/Player.tscn` |
 
 `chip-red-white.png` was the texture on an invisible `Sprite2D` inside `dice.tscn`. That node
-was a leftover and has been removed, so the file is now unreferenced. It is kept rather than
-deleted because the unbuilt board game (ROADMAP 3) is the obvious use for a player token —
-delete it if that never happens.
+was a leftover and has been removed, so the file is now unreferenced. The board game that
+would have used it was dropped in August 2026 (ROADMAP 3), so **both** Kenney sprites are now
+dead weight — `piece-black-border04.png` survives only because `scenes/Player.tscn`, itself
+unused, still points at it. All of it can go whenever someone wants to.
 
 The pack's own licence file ships alongside them as `LICENSE.txt`:
 
