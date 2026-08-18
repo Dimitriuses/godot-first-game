@@ -73,10 +73,11 @@ dotnet build FirstGame.csproj
 Exporting a Windows binary uses the committed preset, which writes to `builds/`
 (gitignored).
 
-**There is no browser demo, and there cannot be one yet.** Godot's .NET flavour does not
-support the Web platform — the installed `4.4.1.stable.mono` export-template set contains
-Windows, Linux, macOS, Android and iOS templates and **no web templates at all**. A
-playable Pages demo would mean porting the C# gameplay scripts to GDScript.
+**There is no browser demo, and there cannot be one while this stays in C#.** Godot's own
+documentation is blunt: *"Projects written in C# using Godot 4 currently cannot be exported
+to the web."* The installed `4.4.1.stable.mono` template set has no web templates at all.
+A playable Pages demo means getting the gameplay into GDScript — by hand, or by generating
+it. That is [ROADMAP.md](ROADMAP.md) item 9, and it is the largest piece of work left.
 
 ## Layout
 
