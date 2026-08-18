@@ -86,8 +86,9 @@ Nothing was ever written for it, and with no board game there is nothing for it 
 
 ## 5. A browser demo — moved to item 9
 
-It grew from "an option we cannot take" into the largest single piece of work left,
-so it lives at the end of the file now rather than in the middle.
+It grew from "an option we cannot take" into the largest single piece of work left, so it
+lives at the end of the file now rather than in the middle. The route is settled: a
+hand-written GDScript port in a second tree, after item 8.
 
 ## 6. Regenerate the die animation from scratch — ✅ done, August 2026
 
@@ -256,15 +257,19 @@ the PNGs on disk and generalises to whatever the generator emits.
 5. Generalise the code (8d), with the `DiceHud` rename first.
 6. Render whichever dice 8a settled on.
 
-## 9. A browser demo, by transpiling C# to GDScript — planned, not started
+## 9. A browser demo, via a hand-written GDScript port — planned, not started
 
 A playable GitHub Pages build is the single most valuable thing this repository could gain,
 and it is still blocked. Godot's own documentation, checked August 2026, is blunt about it:
 
 > Projects written in C# using Godot 4 currently cannot be exported to the web.
 
-So waiting is not a plan. The route is to make a GDScript copy of the gameplay code and export
-*that*, and the proposal here is to generate the copy rather than maintain it by hand.
+So waiting is not a plan. **The decision (August 2026): port the gameplay to GDScript by hand
+into a second tree, after item 8.** C# stays canonical — it is the project, and it is where
+work happens. The GDScript tree is a derived artifact that exists only to produce the web
+build.
+
+A translator was considered and deferred; see 9e.
 
 One piece of good news up front, because it removes the trap most Pages deploys hit: since
 Godot 4.3 the **single-threaded** web export is the default, and it does not need the
@@ -272,119 +277,121 @@ Godot 4.3 the **single-threaded** web export is the default, and it does not nee
 requires. GitHub Pages cannot set custom headers, so this project must stay on the
 single-threaded export — and by default it already would.
 
-### Is a translator the right call?
+**Exit condition.** If .NET web export ever ships, all of this is deletable: drop `web/`, drop
+the workflow, export the C# project directly. That line in the Godot docs is the thing to watch.
 
-Honestly: **for cost alone, no.** The gameplay is about 940 lines across five scripts. Porting
-it to GDScript by hand is roughly a day's work. Writing a C#-to-GDScript translator is weeks,
-and a *general* one is a research project.
+### 9a. The port
 
-The translator wins on a different axis, and it is a real one: a hand port creates a second
-copy that silently rots the moment either side changes. Automating it means the GDScript build
-is never stale and is never something anyone has to remember.
+About 940 lines across five scripts, of which `Player.cs` is dead already (item 3), so four
+scripts really. A day's work, roughly.
 
-Two things make it more attractive here than it would usually be:
+It lives in `web/`, committed. What must **not** be committed is a second copy of `assets/`:
+Godot roots `res://` at `project.godot`, so the GDScript project needs the assets inside its
+own tree, and duplicating 3.6 MB of spritesheets in git — far more once item 8 lands — is
+exactly the kind of thing the 2026 cleanup existed to undo. So `web/` holds only what is
+genuinely different:
 
-- **The C# subset in use is small.** Measured across `scripts/`: 19 pattern matches, 14
-  lambdas, 8 generic instantiations, 5 expression-bodied properties, 3 interpolated strings, 2
-  C# `event`s, 2 `static readonly` fields — and **no LINQ, no `async`/`await`, no `enum`s, no
-  interfaces, no inheritance beyond Godot base classes**. A translator does not have to
-  understand C#; it has to understand *this* C#.
-- **The project already has two deterministic oracles** (see 9d), which is unusual, and is what
-  turns "does the translator work?" from a judgement call into a CI gate.
+```
+web/
+  project.godot          no [dotnet] section, no "C#" in config/features
+  export_presets.cfg     a Web preset, single-threaded
+  scripts/*.gd           the hand-written port
+```
 
-If the translator is wanted as its own artifact — which is a perfectly good reason — it is
-feasible at this scope. If the only goal is a demo on Pages, hand-port once and spend the saved
-weeks on item 8.
+Everything else — `assets/`, and the rewritten `scenes/` — is assembled by CI at build time.
 
-### 9a. The translator
-
-The instinct to build an AST is right, and the tool is **Roslyn**
-(`Microsoft.CodeAnalysis.CSharp`). One correction worth making early: parsing is the easy part.
-Use the **semantic model**, not just the syntax tree — without type resolution you cannot tell
-what `Play` means on `AnimatedSprite`, and name mapping degenerates into guesswork. That means
-building a `Compilation` with references to the Godot assemblies, not just calling
-`CSharpSyntaxTree.ParseText`.
-
-**The trick that makes this tractable: do not hand-write the Godot API name table.** Godot can
-dump its entire API with `godot --dump-extension-api`, producing an `extension_api.json` of
-every class, method, property, signal and enum in **snake_case**. The C# bindings are generated
-from that same data in PascalCase. Pairing the two gives an authoritative symbol map for the
-whole engine, generated rather than maintained, and it regenerates when Godot updates.
-
-What is left is the semantic gap, and that is where the work actually is:
+The constructs that will not map straight across, counted from the current `scripts/`:
 
 | C# in this project | GDScript |
 |---|---|
 | `[Signal] delegate void DiceRolledEventHandler(int)` | `signal dice_rolled(result: int)` |
-| `event Action<Dice> DeleteRequested` (`DiceHud`) | no equivalent — becomes a signal or a `Callable` |
-| `body is not Dice other` | an explicit `is` test plus an assignment |
-| `face is < 1 or > 6` | expanded to `face < 1 or face > 6` |
-| `public bool IsHeld => ...` | no expression-bodied properties; a `func` or a getter block |
-| `Dictionary<Dice, Vector2>`, `List<Dice>` | `Dictionary`, `Array` — untyped |
+| `event Action<Dice> DeleteRequested` (`DiceHud`) | no equivalent — a signal or a `Callable` |
 | `HashSet<Dice>` (`GameManager.deletingDice`) | **no equivalent**; a `Dictionary` used as a set |
-| `$"Total: {total}"` | `"Total: %d" % total` |
+| `Dictionary<Dice, Vector2>`, `List<Dice>` | `Dictionary`, `Array` — untyped |
+| 19 pattern matches (`is not Dice other`, `face is < 1 or > 6`) | expanded to plain conditionals |
+| 5 expression-bodied properties (`public bool IsHeld => …`) | a `func`, or a getter block |
 | `static readonly StringName Idle0 = "idle0"` | `const IDLE0 := &"idle0"` |
-| `partial class`, attributes, namespaces | dropped |
-| closures capturing `die` in `RegisterDie` | GDScript lambdas, with different capture rules |
+| 3 interpolated strings | `"Total: %d" % total` |
 
-Scope it deliberately: **translate the subset, and fail loudly on anything outside it.** A
-translator that refuses to emit is far better than one that emits something subtly wrong, and a
-hard failure is what keeps CI honest.
+Nothing worse than that is in here: **no LINQ, no `async`/`await`, no `enum`s, no interfaces,
+no inheritance beyond Godot base classes.** That is what makes a hand port a day rather than a
+week.
 
-### 9b. Scenes and project files — the part that gets forgotten
+### 9b. Scene and project rewriting — still automated, still needed
 
-The scripts are not the only thing that names C#:
+Dropping the translator does **not** drop this. The scenes name C# in ways a hand port cannot
+fix by itself, and `dice.tscn` is ~4,300 lines of which 606 are `AtlasTexture` regions — nobody
+maintains a second copy of that by hand.
 
-- Every `.tscn` points at a script by path and UID; those must be repointed at `.gd` files, and
-  the `.uid` sidecars regenerated.
-- **Exported property keys are stored under their C# names.** `dice.tscn` contains
-  `AnimatedSprite = NodePath("AnimatedSprite2D")`; the GDScript export would be
-  `animated_sprite`, so the key has to be renamed. Miss this and the scene loads with null
-  exports and no error.
-- `project.godot` needs `"C#"` dropped from `config/features` and its `[dotnet]` section
-  removed.
-- `export_presets.cfg` has only a Windows preset today. A `Web` preset is needed, on the
-  single-threaded default.
-- `dice.tscn` is ~4,300 lines of which 606 are `AtlasTexture` regions. The rewriter must leave
-  them completely alone — `tools/dice-render/validate.py` already proves that and should run
-  after the rewrite.
+So `tools/web-port/` gets a rewriter that reads `scenes/` and emits the GDScript equivalents:
+
+- Repoint every script `ExtResource` at a `.gd` file, and regenerate the `.uid` sidecars.
+- **Rename exported property keys.** `dice.tscn` contains
+  `AnimatedSprite = NodePath("AnimatedSprite2D")`; the GDScript export is `animated_sprite`, so
+  the key must change. Miss this and the scene loads with null exports and **no error at all**.
+- Leave the 606 atlas regions untouched. `tools/dice-render/validate.py` already proves that,
+  and should run against the rewritten scene as part of CI.
 
 ### 9c. The pipeline
 
 A GitHub Actions workflow on `ubuntu-latest`:
 
-1. Install the .NET 8 SDK (for the translator) and Godot **standard**, not .NET — the whole
-   point is that the exported project contains no C#.
+1. Install Godot **standard**, not .NET — the exported project contains no C#.
 2. Fetch the matching web export templates.
-3. Run the translator, then the scene/project rewriter (9b), into a scratch directory.
-4. `godot --headless --import` to build the import cache, then
+3. Assemble a scratch project: `web/` + a copy of `assets/` + `scenes/` through the rewriter.
+4. `godot --headless --import`, then
    `godot --headless --export-release "Web" build/index.html`.
 5. `actions/upload-pages-artifact` + `actions/deploy-pages`.
 
-Keep the generated GDScript **out of the repository**. Committing it recreates exactly the
-stale second copy the translator exists to avoid.
+### 9d. Parity — the load-bearing part
 
-### 9d. Proving it works
-
-This is what makes the idea defensible, and the machinery already exists:
+C# being canonical means the two trees drift the moment either changes, and a stale web demo
+is worse than none. This is the mitigation, and the machinery already exists:
 
 - **The headless test harness** (see [CLAUDE.md](CLAUDE.md)) drives real scenes and asserts on
-  real engine state, currently 18 checks. Translate the harness too, run it against both
-  builds, and require identical output. That is the correctness gate.
+  real engine state, currently 18 checks. Port it too, run it against both trees, and require
+  identical output.
 - **The screenshot pipeline** (`tools/screenshots/`) is byte-deterministic — two runs produce
-  identical files. Render `docs/screenshot.png` from the C# build and from the GDScript build
-  and diff them. They should match exactly, which catches rendering and scene-wiring
-  differences the test harness cannot see.
+  identical files. Render `docs/screenshot.png` from both trees and diff. They should match
+  exactly, which catches rendering and scene-wiring differences the harness cannot see.
 
-Two independent oracles, both built for other reasons, both automatable.
+Both run in CI, and **both should fail the build**, not warn. A parity check nobody is forced
+to look at is a parity check that is already broken.
+
+Two things soften the drift risk in practice. Item 8's weight is in `tools/` — Python, shared
+by both trees — so only the small `Dice.cs` / `DicePalette.cs` changes need mirroring. And the
+gameplay is close to finished: the board game is dropped, and the dice sandbox is what it is.
+
+### 9e. The translator — deferred to its own project
+
+Generating the port rather than writing it was the original plan and remains attractive in the
+abstract, because it removes the drift problem at the root instead of policing it. It lost on
+cost: weeks against a day. It is deferred, not rejected, and would be a separate project rather
+than something this repository carries.
+
+What was worked out, so it is not lost:
+
+- The tool is **Roslyn** (`Microsoft.CodeAnalysis.CSharp`), and the important part is the
+  **semantic model**, not the syntax tree. Parsing C# is the easy 20%; without type resolution
+  you cannot tell what `Play` means on `AnimatedSprite`, and name mapping becomes guesswork.
+  That means a `Compilation` with references to the Godot assemblies.
+- **Do not hand-write the Godot API name table.** `godot --dump-extension-api` emits every
+  class, method, property and signal in snake_case, and the C# bindings are generated from the
+  same data in PascalCase. Pairing them yields an authoritative engine-wide symbol map that is
+  generated rather than maintained, and regenerates when Godot updates.
+- Scope it to the subset in 9a and **fail loudly** on anything outside. A translator that
+  refuses to emit beats one that emits something subtly wrong.
+- The two oracles in 9d are what make it verifiable at all.
+
+If .NET web export ships first, none of this is needed.
 
 ### Suggested order
 
 1. Add a `Web` export preset and confirm a **hand-stubbed** GDScript project exports and runs
-   on Pages. Prove the deployment before building anything to deploy into it.
-2. Build the scene/project rewriter (9b). It is small, and it is needed whichever route wins.
-3. Generate the API name map from `--dump-extension-api` and check it against the calls that
-   actually appear in `scripts/`.
-4. Translate one script end to end — `Dice.cs` is the right one: the most self-contained, and
-   the harness covers it hardest.
-5. Only then decide whether to finish the translator or hand-port the remaining four.
+   on Pages. Prove the deployment before building anything to deploy into it — the unknowns
+   live there, and everything else is wasted if Pages fights back.
+2. Build the scene rewriter (9b). It is needed whatever else happens.
+3. Port `Dice.cs` first: the most self-contained script, and the harness covers it hardest.
+4. Port the rest, then the harness, then wire the parity gates (9d).
+5. Only start after item 8 — porting a moving target twice is the one way to make this
+   genuinely expensive.

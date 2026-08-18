@@ -76,8 +76,9 @@ Exporting a Windows binary uses the committed preset, which writes to `builds/`
 **There is no browser demo, and there cannot be one while this stays in C#.** Godot's own
 documentation is blunt: *"Projects written in C# using Godot 4 currently cannot be exported
 to the web."* The installed `4.4.1.stable.mono` template set has no web templates at all.
-A playable Pages demo means getting the gameplay into GDScript — by hand, or by generating
-it. That is [ROADMAP.md](ROADMAP.md) item 9, and it is the largest piece of work left.
+A playable Pages demo means getting the gameplay into GDScript. The plan is a hand-written
+port in a second tree under `web/`, with C# staying canonical and CI checking the two do
+not drift — [ROADMAP.md](ROADMAP.md) item 9, the largest piece of work left.
 
 ## Layout
 
