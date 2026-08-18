@@ -13,11 +13,21 @@ the die a real up-face, wait for angular velocity to fall below a threshold, rea
 Worth doing with tests: the "which face is up for this orientation" function is pure, and
 is the only part of this project that would benefit from any.
 
-## 2. Show the result
+## 2. Show the result — ✅ done, August 2026
 
-`game.tscn` already has an unused `Label` in the bottom-right corner. Bind it to the
-`DiceRolled` signal. Currently the result exists only in the console, so an exported build
-reports nothing at all.
+The result reaches the screen. `DiceHud` (built in code, not in the scene) lists every die
+on the board with its current value and a running **Total**, and `GameManager.OnDiceRolled`
+updates it from the `DiceRolled` signal — so an exported build now reports something.
+
+It was **not** done the way this item originally proposed. The plan was to bind the spare
+`Label` already sitting in `game.tscn`; instead the HUD grew out of the multi-dice work,
+because one label cannot show eight dice. **That `Label` is still there and still unused** —
+a `Label` node at (1075, 582) that no code fetches. Either delete it or repurpose it; right
+now it is dead scene furniture.
+
+Still missing, and worth a follow-up: the value shown is the one `Dice.Roll()` drew from
+`System.Random`, not one read off the die. Item 1 is what makes the number mean anything;
+this item only makes it visible.
 
 ## 3. Finish the board game the board implies
 
@@ -53,7 +63,9 @@ Android and iOS templates and **no web templates at all**.
 The options, none of them cheap:
 
 - Wait for .NET web export to land in a future Godot release.
-- Port all three scripts to GDScript (~160 lines) and keep a GDScript branch for the demo.
+- Port the gameplay scripts to GDScript and keep a GDScript branch for the demo. This got
+  considerably more expensive during 2026: it was three scripts and ~160 lines, and the
+  multi-dice work took it to five scripts and ~940, most of it runtime UI.
 - Publish a downloadable Windows build under Releases instead — much less valuable than a
   link, but it works today and the export preset is already configured.
 
@@ -82,10 +94,10 @@ old frames came out of a GIF and had binary alpha.
 The CC0 pack also contains a D4, D8, D10, D10-percentile, D12, D20 and a numbered D6, all
 manifold and all under the same terms, and the whole render pipeline is parameterised by
 which object it points at. Adding them is mostly deciding what the *game* does with a d20:
-`Dice.Roll()` hardcodes `random.Next(1, 7)`, `dice.tscn` names its animations `"1"`…`"6"`,
-and `GameManager` fetches a single node called `Dice`. Worth doing **after** item 1 — once
-the physics decides the number, "which face is up" generalises to any solid, and adding dice
-becomes a data change rather than six more hardcoded animations.
+`Dice.Roll()` hardcodes `Random.Shared.Next(1, 7)`, `dice.tscn` names its animations
+`"1"`…`"6"`, and `DicePalette` offers exactly one die type to drag out. Worth doing **after**
+item 1 — once the physics decides the number, "which face is up" generalises to any solid,
+and adding dice becomes a data change rather than six more hardcoded animations.
 
 ## 7. Stop the die tunnelling through the walls — investigation
 

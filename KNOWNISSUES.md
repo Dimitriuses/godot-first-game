@@ -1,8 +1,10 @@
 # Known issues
 
-Everything below was **reproduced by running the project** on Godot 4.4.1 (.NET) in July
-2026, not inferred from reading the source. None of it was fixed by the cleanup pass, which
-deliberately changed no behaviour.
+Everything below was **reproduced by running the project** on Godot 4.4.1 (.NET), not
+inferred from reading the source. The July 2026 cleanup pass deliberately changed no
+behaviour and fixed none of it; the August 2026 work on the dice did fix several, and those
+are struck through or marked *fixed* in place rather than deleted, so the record of what was
+wrong survives.
 
 ---
 
@@ -25,11 +27,16 @@ like and what it is. **Fixing it properly** means giving the die a real orientat
 the up-face when angular velocity drops below a threshold, and only then reporting — which
 is the single change that would turn this from a toy into a dice roller.
 
-## 2. The result never reaches the screen
+## 2. The result never reaches the screen — fixed
 
-`game.tscn` contains a `Label` node positioned at the bottom-right of the board. No code
-references it — the only `GetNode` call in `GameManager` fetches the die. The result goes to
-`GD.Print`, which is invisible in an exported build.
+`DiceHud`, built in code and added to a `CanvasLayer` by `GameManager._Ready`, lists every
+die on the board with its current value and a running **Total**. `GameManager.OnDiceRolled`
+updates it from the `DiceRolled` signal, so the number survives into an exported build.
+`GD.Print("Rolled: " + result)` is still there alongside it.
+
+**The `Label` this item was written about is still in `game.tscn` and still unused** — at
+(1075, 582), fetched by nothing. The HUD was built instead of binding it, because one label
+cannot show eight dice. It is dead scene furniture; delete it or repurpose it.
 
 ## 3. The die can roll itself — fixed
 
@@ -106,10 +113,11 @@ shutting down, so the message queue never flushes the deferred call. The same
 `CallDeferred(nameof(OnSpawnButton))` works perfectly from `_Ready`, which rules out a
 method-binding problem.
 
-Harmless in itself — the game is closing — but it means every session ends with a spurious
-"the die flew out of bounds!" in the console, which is misleading when you are trying to
-reproduce the *real* tunnelling bug above. Guard it with an `IsQueuedForDeletion()` or
-`GetTree() is not null` check.
+Harmless in itself — the game is closing — and **as of August 2026 it is also silent**: the
+handler no longer prints anything, so a session that ends this way produces no console
+output at all (confirmed by a 240-frame headless run, which emitted nothing). The teardown
+event itself still fires and its deferred recentre still never flushes; only the misleading
+message is gone. A guard on `IsQueuedForDeletion()` would make the intent explicit.
 
 *Note: an earlier draft of this file claimed the recovery had "never executed" at all. That
 was wrong. It came from measuring only idle sessions with no input — the die never moves on
@@ -130,7 +138,10 @@ alone.
 - **`Dice.CollisionShape`** is an `[Export]` that nothing reads — it survives from a
   disable-collision-while-rolling idea that was commented out.
 - **`Dice.GetResult()`** supplies each newly registered die's initial HUD value.
-- **Console output is Ukrainian** while identifiers are English.
+- ~~**Console output is Ukrainian**~~ while identifiers are English. No longer true: there is
+  no non-ASCII text left in `scripts/`, and the single remaining `GD.Print` is
+  `"Rolled: " + result`. The Ukrainian out-of-bounds message quoted in issue 4 above is
+  historical.
 - **The export preset uses `export_filter="all_resources"`**, so every file under `assets/`
   ships in the binary whether a scene uses it or not. That was 12.8 MB of unreferenced
   Kenney artwork until the July 2026 cleanup.
@@ -141,6 +152,22 @@ alone.
 
 ## 7. Nothing is tested
 
-There is no test project and no CI. With ~160 lines of engine glue and no pure logic beyond
-`random.Next`, there is little worth pinning — but item 1 above (read the up-face from the
-body's orientation) *would* be testable, and should arrive with tests if it is ever built.
+**Still true: there is no test project, no committed test scene and no CI.** What changed in
+August 2026 is that there is now a *repeatable way* to test, and the argument for not
+bothering has weakened.
+
+The old argument was that ~160 lines of engine glue with no pure logic is not worth pinning.
+The gameplay code is now ~940 lines across five scripts and includes a real state machine
+(`Dice`: resting / held / rolling), which is exactly the kind of thing that breaks silently
+— and did, twice, before it was fixed.
+
+Godot runs headless and the .NET build runs C# in that mode, so a throwaway `Node` scene
+driven by `await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame)` can step the die
+through pickup, spin-up, release and landing and assert on `AnimatedSprite2D.Animation`,
+`.Frame` and `.IsPlaying()`. Twenty such checks were used to verify the August 2026 dice
+rewrite and all passed; the harness was deleted afterwards rather than committed. The recipe
+is written up in [CLAUDE.md](CLAUDE.md).
+
+Making that permanent is the cheapest real improvement available to this repository, and
+item 1 above (read the up-face from the body's orientation) is a pure function that would
+need no harness at all.

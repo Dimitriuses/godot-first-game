@@ -17,8 +17,9 @@ they tumble, land, and report a number. My first project in **Godot 4**, written
 |---|---|
 | **Tab** or **right-edge arrow** | open or close the dice palette |
 | **Drag D6 from the palette** | add another die to the board |
-| **Left-click and drag the die** | grab it — a pin joint follows the cursor, so you can fling or spin it |
-| **Release the left button** | roll only if the die was spun or released above its configured speed threshold |
+| **Left-click and drag the die** | grab it — a pin joint follows the cursor |
+| **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
+| **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
 | **Hold Shift, then drag a die** | select and throw every die together |
 | **Space** | roll every die once, simultaneously |
 | **Total button** | open or close the bottom-left die list |
@@ -33,9 +34,10 @@ There is no score and no way to lose. It is a toy, not a game.
 
 ## Status
 
-**It builds and runs.** Verified on 2026-07-29 against Godot 4.4.1 (.NET build) and the
-.NET 8 SDK: `dotnet build` completes with **0 warnings, 0 errors**, the game launches, the
-drag-and-roll path works, and the Respawn button recentres the die.
+**It builds and runs.** Verified on 2026-08-18 against Godot 4.4.1 (.NET build) and the
+.NET 8 SDK: `dotnet build` completes with **0 warnings, 0 errors**, and a 240-frame headless
+run of `game.tscn` starts clean with no errors or warnings. The dice state machine was
+checked by 20 assertions driven headlessly — see [CLAUDE.md](CLAUDE.md).
 
 It is also **unfinished, and finished-looking in a misleading way.** The board is a board
 game's board, and there is a `Player` script and a ring of eight cell coordinates in the
@@ -49,11 +51,11 @@ the screenshot:
   then plays the animation for that face. The tumble you see is a pre-rendered sprite
   animation chosen *after* the result. The die's actual orientation when it stops is
   unrelated to the number reported.
-- **You cannot see the result in-game.** The roll is written to the console with
-  `GD.Print`. There is a `Label` node sitting in the scene for it, but no code ever writes
-  to it — so in an exported build the number goes nowhere.
+- **The number shown is not the number rolled physically.** As above — the HUD faithfully
+  reports whatever `System.Random` picked, which is not what the die did.
 
-Neither was changed during the 2026 cleanup; see *Known limitations*.
+The first point is untouched and is the headline item in [ROADMAP.md](ROADMAP.md); see
+*Known limitations* for the rest.
 
 ## Running it
 
@@ -90,6 +92,7 @@ scripts/    GameManager.cs   drag/release, respawn, bounds handling
 assets/     dice/            die animation frames  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
+tools/      dice-render/     offline Blender pipeline that produces assets/dice/
 docs/       screenshot, GIF, asset provenance
 ```
 
@@ -101,24 +104,29 @@ Everything here was reproduced by running the project, not inferred from reading
 
 - **The result is random, not physical** (above). A die whose face is decided by
   `System.Random` is a slot machine with extra steps.
-- **The result is invisible in-game.** The `Label` in `game.tscn` is never written to; the
-  only output is `GD.Print`.
-- ~~**The die can re-roll itself.**~~ Fixed: idle animations now return to the settled face
-  when motion stops, and only explicit throws or sufficiently strong die collisions roll.
+- ~~**The result is invisible in-game.**~~ Fixed: `DiceHud` lists every die with its value
+  and a running total. The spare `Label` in `game.tscn` is still unused, though — the HUD
+  was built instead of binding it.
+- ~~**The die can re-roll itself.**~~ Fixed: `idle0`/`idle1` now play **only while a die is
+  held**, so a free die is never left in an idle state for anything to observe and act on.
+  Rolls start from exactly three places: releasing a die you spun, a hard enough die-to-die
+  collision, and Space.
 - **The die tunnels through the walls on fast throws**, and corners are noticeably the worst
   spot. Thickening the wall colliders barely helped; continuous collision detection
   (`continuous_cd`, off by default in Godot) has not been tried yet. The out-of-bounds
   handler that teleports the die back and zeroes its velocity is the mitigation, and it
   works. Under investigation — see `KNOWNISSUES.md`.
-- **Every session ends with a spurious out-of-bounds message.** Separately from the above,
-  `BodyExited` also fires once during scene teardown, on the same frame as `_ExitTree`,
-  where the deferred recentre can never be flushed. Harmless, but it muddies the console
-  while you are chasing the real bug.
+- **`BodyExited` still fires once during scene teardown**, on the same frame as `_ExitTree`,
+  where the deferred recentre can never be flushed. It is now silent — the handler prints
+  nothing, so it no longer muddies the console — but the event is still unguarded.
 - **Nothing moves until you touch it.** Gravity is disabled (top-down board), so the opening
   scene is completely static: 1,800 consecutive rendered frames are byte-identical.
 - **The board game was never built.** `Player.cs` is not instantiated by anything.
-- **No tests, no CI.** The engine-facing gameplay code is currently verified manually.
-- **Console output is in Ukrainian**, mixed with English identifiers.
+- **No tests, no CI.** Nothing is committed. The dice rewrite was verified with a throwaway
+  headless harness that was then deleted; the recipe is in [CLAUDE.md](CLAUDE.md), and
+  making it permanent is the cheapest real improvement available here.
+- ~~**Console output is in Ukrainian.**~~ No longer true: there is no non-ASCII text left in
+  `scripts/`, and the one remaining `GD.Print` is `"Rolled: " + result`.
 - ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed: the die now uses an unscaled 32 px-radius
   collider that follows the visible body more closely.
 - ~~**The die artwork is third-party with unknown terms.**~~ Fixed in August 2026: the
@@ -146,8 +154,17 @@ mistyped `../Relises/` outside the repository. The tree went from **2,741 tracke
 
 The pre-cleanup state is tagged **`v0.1-original`**.
 
+August 2026 was the first pass that **did** change behaviour. The die animation was
+re-rendered from a CC0 model, settling the one licensing question and cutting the artwork
+from 18.6 MB to 3.9 MB (ROADMAP 6). The board then grew multiple dice, a drag-out palette
+and a value HUD, which closed ROADMAP 2. Finally `Dice.cs` was rewritten as an explicit
+three-state machine after the drag work left it freezing on a single frame — the cause was
+`AnimatedSprite2D.Stop()` rewinding to frame 0 where `Pause()` was meant, and the workaround
+code built on top of that had been fighting a stall it was itself causing.
+
 ## Licence
 
-[MIT](LICENSE) for the code. **Not** for the artwork — see
-[docs/ASSETS.md](docs/ASSETS.md), which includes one asset set whose origin could not be
-established and one that is third-party with unknown terms.
+[MIT](LICENSE) for the code, and for the die frames under `assets/dice/`, which were
+rendered for this repository from a CC0 model. **Not** for the rest of the artwork — see
+[docs/ASSETS.md](docs/ASSETS.md), which still includes one asset set whose origin could not
+be established.
