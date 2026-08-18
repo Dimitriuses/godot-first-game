@@ -1,4 +1,4 @@
-[gd_scene load_steps=620 format=3 uid="uid://ct6xq3adgo4q7"]
+[gd_scene load_steps=619 format=3 uid="uid://ct6xq3adgo4q7"]
 
 [ext_resource type="Script" uid="uid://0e2op4qfb1lj" path="res://scripts/Dice.cs" id="1_dicg2"]
 [ext_resource type="Texture2D" uid="uid://bko510nk6hi1f" path="res://assets/dice/dice_1_sprites.png" id="1_ocjtb"]
@@ -9,7 +9,6 @@
 [ext_resource type="Texture2D" uid="uid://b7d2tm7gwu1hw" path="res://assets/dice/dice_6_sprites.png" id="6_4kp1s"]
 [ext_resource type="Texture2D" uid="uid://v4xp43pidc7d" path="res://assets/dice/dice_idle0_sprites.png" id="7_nkpnt"]
 [ext_resource type="Texture2D" uid="uid://bl5rvtp25ldvg" path="res://assets/dice/dice_idle1_sprites.png" id="8_mvkvt"]
-[ext_resource type="Texture2D" uid="uid://c7l124qiy2pfv" path="res://assets/kenney-boardgame/chip-red-white.png" id="10_pgf55"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_dicg2"]
 bounce = 0.6
@@ -4308,6 +4307,8 @@ input_pickable = true
 physics_material_override = SubResource("PhysicsMaterial_dicg2")
 gravity_scale = 0.0
 freeze_mode = 1
+center_of_mass_mode = 1
+center_of_mass = Vector2(0, 0)
 linear_damp = 1.5
 script = ExtResource("1_dicg2")
 AnimatedSprite = NodePath("AnimatedSprite2D")
@@ -4321,11 +4322,6 @@ frame_progress = 1.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 visible = false
+position = Vector2(1, 12)
 shape = SubResource("CircleShape2D_dicg2")
 one_way_collision_margin = 0.0
-
-[node name="Sprite2D" type="Sprite2D" parent="."]
-visible = false
-modulate = Color(1, 1, 1, 0.501961)
-position = Vector2(0, 30)
-texture = ExtResource("10_pgf55")

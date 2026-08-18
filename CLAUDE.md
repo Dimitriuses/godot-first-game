@@ -151,6 +151,11 @@ why. Do not rebuild it without reading that first.
   frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
   and the collision re-roll starts a clip. Anything that repositions dice should switch
   `ContactMonitor` off first — the screenshot tool does, after this cost it determinism twice.
+- **An offset collider moves the centre of mass.** `center_of_mass_mode` defaults to Auto,
+  which derives the centre from the collision shapes — so the die's collider offset of
+  `(1, 12)` made it spin about a point 12 px off its origin and wander 24 px while turning on
+  the spot. `dice.tscn` now pins `center_of_mass` to `(0, 0)`. Offsetting a shape to line it
+  up with artwork is fine; just pin the centre of mass when you do.
 - **Do not zero a die's `CollisionLayer` to quiet it.** The bounds `Area2D` finds bodies by
   layer, so clearing it makes `BodyExited` fire and the out-of-bounds recovery teleports every
   die back to the spawn point. Turn off `ContactMonitor` instead.

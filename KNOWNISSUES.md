@@ -141,7 +141,13 @@ alone.
 
 ## 6. Smaller things
 
-- ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed with an unscaled 32 px-radius shape.
+- ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed with an unscaled 32 px-radius shape,
+  offset to `(1, 12)` so it sits under the drawn die — which is 13.5 px below the centre of
+  its own 128 px sprite cell. That offset then became the body's **centre of mass**, because
+  `center_of_mass_mode` defaults to Auto and Auto derives it from the collision shapes. A
+  spinning die therefore orbited a point 12 px below its own origin, measured at 24 px of
+  wander with no linear velocity at all. Pinning `center_of_mass` to `(0, 0)` fixed it; the
+  same measurement now reads 0.
 - **`Dice.CollisionShape`** is an `[Export]` that nothing reads — it survives from a
   disable-collision-while-rolling idea that was commented out.
 - **`Dice.GetResult()`** supplies each newly registered die's initial HUD value.

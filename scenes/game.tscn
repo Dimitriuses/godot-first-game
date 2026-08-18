@@ -776,7 +776,7 @@ offset_bottom = 78.0
 text = "Respawn"
 
 [node name="Dice" parent="." instance=ExtResource("2_yqjtg")]
-position = Vector2(599, 343)
+position = Vector2(600, 343)
 
 [node name="StaticBody2D" type="StaticBody2D" parent="."]
 visible = false
@@ -784,19 +784,19 @@ position = Vector2(96, 96)
 physics_material_override = SubResource("PhysicsMaterial_yqjtg")
 
 [node name="UperWall" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(477.5, -132)
+position = Vector2(474, -106)
 shape = SubResource("RectangleShape2D_yqjtg")
 
 [node name="LowerWall" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(474.5, 619.5)
+position = Vector2(473, 605)
 shape = SubResource("RectangleShape2D_yqjtg")
 
 [node name="LeftWall" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(-146, 260.781)
+position = Vector2(-126, 260)
 shape = SubResource("RectangleShape2D_lnu2h")
 
 [node name="LeftWall2" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(1098.5, 264.938)
+position = Vector2(1083, 269)
 shape = SubResource("RectangleShape2D_lnu2h")
 
 [node name="MousePin" type="PinJoint2D" parent="."]

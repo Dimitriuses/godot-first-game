@@ -7,10 +7,15 @@ where it came from, and how that was established — by measurement where possib
 
 ## `assets/kenney-boardgame/` — CC0, no restrictions
 
-| File | Source |
-|---|---|
-| `chip-red-white.png` | Boardgame pack v2 by Kenney Vleugels — www.kenney.nl |
-| `piece-black-border04.png` | same pack |
+| File | Source | Used by |
+|---|---|---|
+| `chip-red-white.png` | Boardgame pack v2 by Kenney Vleugels — www.kenney.nl | **nothing, as of August 2026** |
+| `piece-black-border04.png` | same pack | `scenes/Player.tscn` |
+
+`chip-red-white.png` was the texture on an invisible `Sprite2D` inside `dice.tscn`. That node
+was a leftover and has been removed, so the file is now unreferenced. It is kept rather than
+deleted because the unbuilt board game (ROADMAP 3) is the obvious use for a player token —
+delete it if that never happens.
 
 The pack's own licence file ships alongside them as `LICENSE.txt`:
 
