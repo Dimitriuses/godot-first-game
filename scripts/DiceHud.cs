@@ -15,10 +15,17 @@ public partial class DiceHud : Control
 		public int Faces;
 	}
 
+	/// Where the hover tag sits relative to the cursor. Down and right, so the pointer
+	/// is not standing on the number it is there to show.
+	private static readonly Vector2 TagOffset = new(18, 18);
+
 	private readonly Dictionary<Dice, DieEntry> entries = new();
 	private VBoxContainer rows;
 	private PanelContainer drawer;
 	private Button totalButton;
+	private PanelContainer valueTag;
+	private Label valueTagLabel;
+	private Dice hoveredDie;
 	private Tween drawerTween;
 	private bool isOpen;
 
@@ -28,6 +35,63 @@ public partial class DiceHud : Control
 		BuildInterface();
 		SetOpen(false, false);
 		Refresh();
+		SetProcess(false);          // only while a die is under the cursor
+	}
+
+	public override void _Process(double delta)
+	{
+		UpdateValueTag();
+	}
+
+	/// <summary>
+	/// A die was entered or left by the cursor. Both dice report, so the exit of one
+	/// arriving after the entry of the next must not clear the newer one.
+	/// </summary>
+	public void SetDieHovered(Dice die, bool hovered)
+	{
+		if (hovered)
+			hoveredDie = die;
+		else if (hoveredDie == die)
+			hoveredDie = null;
+		else
+			return;
+
+		SetProcess(hoveredDie != null);
+		UpdateValueTag();
+	}
+
+	/// The number the die is showing, next to the cursor.
+	///
+	/// Re-evaluated every frame rather than only on enter and exit, because everything
+	/// it depends on can change while the cursor sits still: the die gets picked up, a
+	/// roll finishes and the value changes, another die knocks into it.
+	private void UpdateValueTag()
+	{
+		// Hidden while held, and while rolling: the result is decided the moment a
+		// throw starts, and showing it before the clip lands would give the throw away.
+		if (hoveredDie == null || !IsInstanceValid(hoveredDie)
+			|| hoveredDie.IsHeld || hoveredDie.IsRolling
+			|| !entries.TryGetValue(hoveredDie, out DieEntry entry))
+		{
+			valueTag.Visible = false;
+			return;
+		}
+
+		valueTagLabel.Text = $"d{entry.Faces} #{entry.Id}   {entry.Value}";
+		valueTag.ResetSize();       // a PanelContainer outside a container keeps its old size
+		valueTag.Visible = true;
+
+		// Flip to the other side of the cursor near an edge rather than clamping to it.
+		// A clamped tag stops following the pointer while the pointer keeps moving,
+		// which reads as a label that has got stuck.
+		Vector2 mouse = GetViewport().GetMousePosition();
+		Vector2 view = GetViewportRect().Size;
+		Vector2 size = valueTag.Size;
+		valueTag.Position = new Vector2(
+			Mathf.Max(8f, mouse.X + TagOffset.X + size.X > view.X - 8f
+				? mouse.X - TagOffset.X - size.X : mouse.X + TagOffset.X),
+			Mathf.Max(8f, mouse.Y + TagOffset.Y + size.Y > view.Y - 8f
+				? mouse.Y - TagOffset.Y - size.Y : mouse.Y + TagOffset.Y));
 	}
 
 	public void AddDie(Dice die, int id, int value)
@@ -50,6 +114,7 @@ public partial class DiceHud : Control
 	public void RemoveDie(Dice die)
 	{
 		die.SetHovered(false);
+		SetDieHovered(die, false);
 		if (entries.Remove(die))
 			Refresh();
 	}
@@ -122,6 +187,32 @@ public partial class DiceHud : Control
 		totalButton.OffsetBottom = -16;
 		totalButton.Pressed += () => SetOpen(!isOpen, true);
 		AddChild(totalButton);
+
+		// Added last so it draws over the drawer, and ignores the mouse so it cannot
+		// put itself between the cursor and the die it is describing.
+		valueTag = new PanelContainer
+		{
+			Name = "ValueTag",
+			MouseFilter = MouseFilterEnum.Ignore,
+			Visible = false
+		};
+		var tagStyle = new StyleBoxFlat
+		{
+			BgColor = new Color("202536f0"),
+			BorderColor = new Color("77819b"),
+			ContentMarginLeft = 10,
+			ContentMarginRight = 10,
+			ContentMarginTop = 5,
+			ContentMarginBottom = 5
+		};
+		tagStyle.SetBorderWidthAll(2);
+		tagStyle.SetCornerRadiusAll(8);
+		valueTag.AddThemeStyleboxOverride("panel", tagStyle);
+		AddChild(valueTag);
+
+		valueTagLabel = new Label { MouseFilter = MouseFilterEnum.Ignore };
+		valueTagLabel.AddThemeFontSizeOverride("font_size", 16);
+		valueTag.AddChild(valueTagLabel);
 	}
 
 	private void Refresh()

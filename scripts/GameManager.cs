@@ -225,6 +225,10 @@ public partial class GameManager : Node2D
 		die.DiceRolled += result => OnDiceRolled(die, result);
 		die.InputEvent += (Node viewport, InputEvent @event, long shapeIdx) =>
 			OnDiceInput(die, @event);
+		// Hovering a die names the number it is showing. A d20's up-face is small and
+		// steeply foreshortened in this camera, so reading it off the die is a squint.
+		die.MouseEntered += () => diceHud.SetDieHovered(die, true);
+		die.MouseExited += () => diceHud.SetDieHovered(die, false);
 		die.TreeExiting += () =>
 		{
 			dice.Remove(die);

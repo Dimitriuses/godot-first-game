@@ -56,9 +56,16 @@ because one label cannot show eight dice. **That `Label` is still there and stil
 a `Label` node at (1075, 582) that no code fetches. Either delete it or repurpose it; right
 now it is dead scene furniture.
 
-Still missing, and worth a follow-up: the value shown is the one `Dice.Roll()` drew from
-`System.Random`, not one read off the die. Item 1 is what makes the number mean anything;
-this item only makes it visible.
+**Hovering a die names its number**, in a small tag beside the cursor, added once the d20
+shipped (item 8). It is not decoration: a d20's up-face is the smallest face on the die and
+the camera sees it at 31 degrees, so reading a 17 off the sprite is a squint where reading a
+d6's pips is not. The tag hides while the die is held and for the whole of a roll — the
+result is decided the moment a throw starts, and showing it before the clip lands would give
+the throw away.
+
+Still missing, and worth a follow-up: the value shown is derived from the release frame of
+the tumble, not read off where the die physically stops. Item 1 is what makes the number
+mean anything; this item only makes it visible.
 
 ## 3. ~~Finish the board game the board implies~~ — dropped, August 2026
 

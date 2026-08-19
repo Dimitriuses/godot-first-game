@@ -90,6 +90,23 @@ clamps a spawn into the viewport, and at 64px wide the clamp's minimum exceeds i
 `Mathf.Clamp` throws. Set `GetWindow().Size = new Vector2I(1280, 720)` at the top of a harness
 that touches viewport-relative code.
 
+### `_Process` and `PhysicsFrame` are not interchangeable
+
+The recipe above steps the engine on `SceneTree.PhysicsFrame`, which is right for physics and
+wrong for anything driven from `_Process`. Headless runs the idle loop at an unpredictable
+rate relative to the physics one — measured at **one `_Process` tick per two physics frames**
+— so `await Frames(2)` after a state change may or may not have let the UI react. That showed
+up as a hover tag that "failed to hide", flaked between runs, and started passing the moment
+a debug counter perturbed the timing. Await `SceneTree.ProcessFrame` for those:
+
+```csharp
+private async Task Ticks(int n)
+{
+    for (int i = 0; i < n; i++)
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+}
+```
+
 ### Smoke test
 
 Cheap, and catches anything that throws during startup:
@@ -117,7 +134,15 @@ what found the original bug.
 
 Mouse input. The tests drove `Dice.StartDragging()` / `ReleaseFromDrag()` directly rather
 than synthesising clicks, so the `InputEvent` → `PinJoint2D` path in `GameManager` is not
-covered. Click and fling by hand once before calling a drag change done.
+covered. Click and fling by hand once before calling a drag change done. Same for hover:
+`DiceHud.SetDieHovered` is called directly, and what a harness *can* check is that the
+signal is wired — `die.GetSignalConnectionList("mouse_entered").Count == 1`.
+
+Anything positioned from the cursor. `Input.WarpMouse` needs a real window, so the headless
+mouse sits at the origin. To look at one, patch `tools/screenshots/Capture.cs` to warp and
+hover, run `python tools/screenshots/capture.py`, look at `docs/screenshot.png`, then put
+`Capture.cs` back and re-run it — the images are deterministic, so the originals come back
+byte-identical and there is nothing to clean up by hand.
 
 ## Where the number comes from
 

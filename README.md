@@ -22,6 +22,7 @@ and let go — they tumble, land, and report a number. My first project in **God
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
 | **Hold Shift, then drag a die** | select and throw every die together |
 | **Space** | throw every die — they scatter across the board as well as rolling |
+| **Hover a die on the board** | a small tag by the cursor names it and the number it is showing |
 | **Total button** | open or close the bottom-left die list |
 | **Hover a die-list row** | highlight its die on the board |
 | **× in a die-list row** | remove that die |
