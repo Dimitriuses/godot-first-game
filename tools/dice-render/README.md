@@ -27,9 +27,14 @@ python tools/dice-render/pipeline.py d20 --run --install --scene
 python tools/dice-render/pipeline.py d20 --status            # what is already on disk
 ```
 
-Nothing lands in the repository until `--install` (sheets into `assets/dice/`) and
+Nothing lands in the repository until `--install` (sheets into `assets/dice/<die>/`) and
 `--scene` (regenerate the die's `.tscn`). Everything before that stays in
 `tools/dice-render/build/<die>/`, which is gitignored.
+
+Each die keeps its sheets in a directory of its own, named after it, and the files inside are
+named after the animation: `assets/dice/d20/17_sprites.png`, `assets/dice/d6/idle0_sprites.png`.
+Forty-four sheets in one flat folder needed a prefix on every filename to stay apart, and the
+prefix said nothing the folder does not.
 
 Useful flags:
 
@@ -40,6 +45,7 @@ Useful flags:
 | `--red 20` | tint that face's glyph red for this run; `--red none` for no tint |
 | `--keep` | keep the 512px sub-frames instead of pruning as it goes |
 | `--blender <path>` | if it is not where `BLENDER_CANDIDATES` expects |
+| `--collider` | measure the installed resting sprite and report the collider that fits it |
 
 **It renders one clip at a time, on purpose.** A d20's sub-frames are about 2.2 GB if they
 all have to exist at once; compositing and pruning each clip before starting the next keeps
@@ -66,7 +72,7 @@ DICE_DIE=d20 DICE_ONLY=face3 blender.exe   "assets/Dice D20 D12 D8 D10 D8 D6 D4/
 # 2. accumulate them into motion-blurred 128px frames
 python tools/dice-render/composite.py --die d20 face3
 
-# 3. pack to spritesheets and drop them into assets/dice/
+# 3. pack to spritesheets and drop them into assets/dice/d20/
 python tools/dice-render/pack.py --die d20 --install
 
 # 4. write the scene, then check it lines up with the sheets
@@ -81,12 +87,12 @@ modify the source model and does not save the `.blend`.
 
 | | |
 |---|---|
-| `pipeline.py` | Drives the other five, one clip at a time, with `--resume` and `--status`. The thing to run. |
+| `pipeline.py` | Drives the other five, one clip at a time, with `--resume`, `--status` and `--collider`. The thing to run. |
 | `render.py` | Builds the toon material and camera, then renders each output frame as up to 20 crisp samples across its shutter interval, into `build/<die>/faces/<clip>/`. Writes a `meta.json` per animation recording the sub-frame count and the ground-shadow position for each sample. `DICE_DIE`, `DICE_ONLY` and `DICE_RED` select the die, the clips and the tinted face. |
 | `composite.py` | Per sub-frame: shadow, then an alpha-dilated black outline, then the die. Averages the sub-frames — that average *is* the motion blur — then box-downsamples 512→128. |
 | `pack.py` | Lays frames out `cols` per row into the sheets the die's scene indexes. |
 | `make_scene.py` | Writes a die's `.tscn` from `dice_config.py` plus the sheets on disk — 606 atlas regions for the d6, ~2,000 for a d20. Run without `--write` it *compares* instead, field by field, against the scene already committed. |
-| `dice_config.py` | The per-die table: source object, face count, sheet prefix, scene path and uid, cell size, fps and the whole `RigidBody2D` setup. Adding a die is an entry here. |
+| `dice_config.py` | The per-die table: source object, face count, scene path and uid, cell size, fps, the face-value and twist tables and the whole `RigidBody2D` setup. Adding a die is an entry here. |
 | `validate.py` | Re-reads a die's `.tscn` and checks every atlas region against the PNGs on disk. |
 
 ## Generating the scene
@@ -124,6 +130,21 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 - **Sub-frame count scales with angular speed** (`deg_per_sub`), so slow frames near the
   landing cost one render and fast ones cost twenty. Dropping `max_sub` below about 16
   brings back visible ghosting on the first few frames.
+- **The die is recentred on its incentre, not its bounding box.** The bbox centre is the true
+  centre for anything centrally symmetric and wrong for anything else: a tetrahedron's four
+  face planes came out at 0.10 to 0.42 from the origin instead of all alike, which put the
+  rotation pivot off centre, the resting height wrong, and the face radii inconsistent — and
+  those radii decide which recessed vertices belong to which face, so **glyphs were assigned to
+  the wrong faces**. `recentre_on_faces` solves `n_i . c + r = d_i` by least squares.
+  It applies only above `TOLERANCE`, and that is not laziness: for a centrally symmetric solid
+  the solve returns noise, and moving by noise changes the glyph masks, because
+  `recessed_by_face` uses an absolute depth below the face plane. Shifting the d20 by its own
+  noise changed 71,355 pixels of one landing clip.
+- **Face symmetry is the smallest m that fits, not the strongest.** A triangle's three corners
+  are perfectly six-fold coherent as well as three-fold, so "highest score wins" reports a d4
+  as six-sided. `face_symmetry` also looks only at the outermost vertices: a triangle's edge
+  midpoints sit at half its circumradius and are three-fold coherent 60 degrees out of phase
+  with its corners, which cancels most of the signal.
 - **Dice are scaled to equal *mean silhouette*, not to equal bounding box.** `normalised_mesh`
   fits every die into a unit cube, which sounds like the same size and is not: a cube fills
   its bounding box and an icosahedron does not, so a d20 normalised that way came out 42px
@@ -135,6 +156,15 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
   resizing the mesh under it would change which vertices count as glyphs.
 - **`REST_Z` is per die**, the inradius times that scale, and every height in `SEGS` is an
   offset above it. A die that is drawn bigger rests higher, or it sinks into the board.
+- **Equal mean silhouette is not equal size at rest.** It is the right invariant for a die that
+  tumbles through every orientation, but the resting extents still differ: the d4 measures
+  70px across against the d6's 58, because a tetrahedron is the least spherical solid here. The
+  collider follows the drawn die instead — `pipeline.py <die> --collider` measures it, by a
+  rule that reproduces the d6's and the d20's shipped numbers.
+- **A numbered face pins the die's rotation; a pipped one does not.** A numeral is upright at
+  exactly one rotation about the vertical, so the numbered d6 stands face-forward while the
+  pipped d6 — free to sit anywhere — stands corner-forward, and comes out 48px wide against
+  58px. All four twists give the same silhouette, so there is no twist that recovers it.
 - **The camera is orthographic.** `ortho_scale` controls framing without introducing
   perspective convergence as the die moves toward or away from the camera.
 - **Both idle loops match the opening speed of a numbered roll.** `idle1` additionally
@@ -149,9 +179,9 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 
 ## Adding the other dice (ROADMAP 8)
 
-`dice_config.py` holds the per-die table. The **d6 and d20 are rendered**; the pack also has
-a D4, D8, D10, D10-percentile, D12 and a numbered D6, deferred on size rather than effort —
-all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
+`dice_config.py` holds the per-die table. **Four are rendered** — a pipped d6, a d20, a d4 and
+a numbered d6, 21.62 MB in total. The pack also has a D8, a D10, a percentile D10 and a D12,
+deferred on size rather than effort: all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
 
 Adding one is a config entry, its two tables, and a run:
 
@@ -179,18 +209,37 @@ An alphanumeric die needs two tables in `dice_config.py`, because neither can be
 - `face_twists` — which of the face's three corners points up, so the numeral reads the right
   way round rather than lying on its side.
 
-Both are read once off `face_sheet.py`:
+Both are read once off `face_sheet.py`, which renders three different sheets:
 
 ```sh
+# 1. every face flat-on, one glyph inked at a time -> face_values
 DICE_DIE=d20 blender "<the blend>" --background --python tools/dice-render/face_sheet.py
 python tools/dice-render/face_sheet.py --assemble d20
+
+# 2. every value at every way up, through the game camera -> face_twists
+DICE_DIE=d20 blender "<the blend>" -b --python tools/dice-render/face_sheet.py -- --twists
+python tools/dice-render/face_sheet.py --assemble-twists d20
+
+# 3. every value as the game will show it, to check the two tables together
+DICE_DIE=d20 blender "<the blend>" -b --python tools/dice-render/face_sheet.py -- --rest
+python tools/dice-render/face_sheet.py --assemble-rest d20
 ```
+
+The flat-on sheet **cannot** tell you the twists: it presents every face the same way up by
+construction, so every numeral looks upright on it whatever the die will actually do.
 
 `face_values` is then machine-checked — opposite faces must sum to `faces + 1` and every value
 must appear once — so a misreading has to be a self-consistent conspiracy to get through.
 
-Two quirks: **the d4 has no up-face** (the value is read at the apex), and the **percentile
-d10 shows 00–90**, which the game code has no concept for yet.
+**The d4 has no up-face**, and it is handled: a tetrahedron has no parallel faces, so
+`rest_face_down` stands it on a face with a vertex at the top. It is a missing-numeral die —
+each face carries three numerals and omits one, and the omitted one is what it shows when it
+lands on that face, which is true whether the die is read at the apex or along the bottom edge.
+It also has no opposite faces and therefore no machine check on `face_values`; the constraint
+that does hold is that each value appears on exactly three faces.
+
+Still unhandled: the **percentile d10 shows 00–90**, which the game code has no concept for,
+and its faces are kites rather than regular polygons, so `face_symmetry` may not resolve them.
 
 The camera, toon material, motion-blur accumulation and compositing stages are all
 shape-agnostic and carry over unchanged.

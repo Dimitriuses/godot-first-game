@@ -28,13 +28,14 @@ public partial class Capture : Node
 
 	// Board layout: position -> the face that die should show, and which entry of
 	// GameManager.DiceScenes it is. Literal, so the same picture comes out every time.
-	// Entry 0 is the die game.tscn already contains, so its Scene must stay 0.
+	// One of each type, in the order the palette lists them. Entry 0 is the die
+	// game.tscn already contains, which is the d6, so its Scene must be the d6's index.
 	private static readonly (Vector2 Pos, int Face, int Scene)[] Board =
 	{
-		(new Vector2(400, 272), 5, 0),
-		(new Vector2(702, 258), 2, 0),
-		(new Vector2(842, 402), 17, 1),
-		(new Vector2(468, 474), 20, 1),
+		(new Vector2(400, 272), 5, 1),      // d6
+		(new Vector2(702, 258), 3, 0),      // d4
+		(new Vector2(842, 402), 17, 3),     // d20
+		(new Vector2(468, 474), 4, 2),      // d6 numbered
 	};
 	// Clear of the orange floor decoration and of the die-list panel.
 	private static readonly Vector2 RollingDiePosition = new(599, 250);
@@ -98,10 +99,18 @@ public partial class Capture : Node
 		// also hides the dice from the bounds Area2D, whose BodyExited then fires for
 		// every one of them and the out-of-bounds recovery teleports the whole board
 		// back to the spawn point.
+		// InputPickable off for the same reason, and it is not optional: a real window
+		// opens for a few seconds, Godot picks against wherever the operator's cursor
+		// actually is, and a cursor resting over a die raises the hover tag into the
+		// shot. Clear any hover already raised too — mouse_exited does not fire for a
+		// body that stops being pickable.
+		var hud = game.GetNode<CanvasLayer>("GameUiLayer").GetNode<DiceHud>("DiceHud");
 		foreach (Dice die in dice)
 		{
 			die.SetPhysicsProcess(false);
 			die.ContactMonitor = false;
+			die.InputPickable = false;
+			hud.SetDieHovered(die, false);
 		}
 
 		for (int i = 0; i < dice.Count && i < Board.Length; i++)

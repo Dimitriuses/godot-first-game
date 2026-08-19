@@ -36,6 +36,11 @@ public partial class Dice : RigidBody2D
 	/// frame picked. 0 makes the throw fully aimable; 3 makes the frame irrelevant.
 	[Export] public int ResultJitter = 2;
 
+	/// What the palette calls this die. Empty means "work it out from the face count",
+	/// which is right for every die until two of them have the same one -- a pipped and
+	/// a numbered d6 would both come out "D6".
+	[Export] public string DieLabel = "";
+
 	/// How hard a held die must be moved to spin it up to idle0, then to idle1.
 	[Export] public float SpinOnSpeed = 120f;
 	[Export] public float FastSpinOnSpeed = 600f;

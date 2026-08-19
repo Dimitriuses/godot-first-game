@@ -17,7 +17,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 # Shared by every die. A die entry may override any of these.
 DEFAULTS = dict(
-    sheets_dir="assets/dice",
+    sheets_root="assets/dice",      # each die gets a subdirectory of this
     script="res://scripts/Dice.cs",
 
     cell=128,               # sprite cell, pixels
@@ -55,14 +55,22 @@ DEFAULTS = dict(
     # played n times: {face: dict(turns, a0, a1, drift)}. None generates them
     # (see `throw_params` in render.py), which is what any new die should use.
     face_throws=None,
+
+    # Whether a value's face points away from the camera when the die rests on it.
+    # True only for the d4, which has no parallel faces to stand on.
+    rest_face_down=False,
+
+    # Corners per face, which is how many distinct `face_twists` a face has. Measured
+    # off the rim when None, which is right for every regular solid in the pack; the
+    # override is here for a face whose symmetry is not its corner count.
+    face_symmetry=None,
 )
 
 DICE = {
     "d6": dict(
-        label="D6",
+        label="d6",
         source_object="D6 Dotted",      # object name inside the CC0 blend
         faces=6,
-        sheet_prefix="dice",            # dice_1_sprites.png ... dice_idle1_sprites.png
         scene="scenes/dice.tscn",
         # game.tscn refers to this scene by uid, so it must be preserved
         scene_uid="uid://ct6xq3adgo4q7",
@@ -83,10 +91,9 @@ DICE = {
         },
     ),
     "d20": dict(
-        label="D20",
+        label="d20",
         source_object="D20",
         faces=20,
-        sheet_prefix="d20",
         scene="scenes/d20.tscn",
         # Minted with ResourceUID.create_id() rather than left to Godot: a scene
         # generated outside the editor never gets one, and game.tscn refers to this
@@ -111,13 +118,80 @@ DICE = {
         # on a d20 either the 1 or the 20 would be a defensible choice, so it is left
         # off rather than invented. `DICE_RED=20` renders a variant to look at.
     ),
+    "d6n": dict(
+        # Distinct from the dotted d6's "d6": both have six faces, so the palette and
+        # the die list would name them identically and offer no way to tell which row
+        # or which drawer entry is which.
+        label="d6 num",
+        source_object="D6 Numbered",
+        faces=6,
+        scene="scenes/d6n.tscn",
+        scene_uid="uid://bkk1sn4g0pswk",
+        # Read off face_sheet.py. The face order happens to run 1..6, which the
+        # opposite-faces-sum-to-7 check confirms rather than assumes.
+        face_values=[1, 2, 3, 4, 5, 6],
+
+        # Quarter turns, one per face, read off `face_sheet.py --twists`. Square faces,
+        # so 0..3. Indexed by face, and face k carries value k+1 here, so this is also
+        # the per-value list: 1 and 4 need three quarter turns, 2 and 3 one, 5 and 6
+        # none. The 6 is the face with two glyph clusters -- it is underdotted, which is
+        # how this model tells a 6 from a 9.
+        face_twists=[3, 1, 1, 3, 0, 0],
+        red_value=None,
+
+        # Smaller than the dotted d6 despite being the same solid, and there is no
+        # choice about it. A numeral is upright at exactly one rotation about the
+        # vertical, which pins this cube face-forward, where the pipped d6 -- whose
+        # pips have no way up, so whose rotation is free -- stands corner-forward. A
+        # cube is 1.4x wider across its corners than across its faces. All four twists
+        # give the same silhouette, so no other twist recovers the size; only tilting
+        # every numeral 45 degrees would, which is worse.
+        collider_radius=28.0,
+        collider_offset=(0, 12),
+    ),
+    "d4": dict(
+        label="d4",
+        source_object="D4",
+        faces=4,
+        scene="scenes/d4.tscn",
+        scene_uid="uid://ckuwfsdjywlmh",
+
+        # Bigger than the other dice, and correctly so: `presentation_scale` equalises
+        # the *mean* silhouette over all orientations, and a tetrahedron is the least
+        # spherical solid in the pack, so matching on average leaves it 70px across at
+        # rest against the d6's 58. The collider follows the drawn die rather than the
+        # rule -- measured half-extent 34.5px, centred 3px left and 16px down of the
+        # sprite's middle.
+        collider_radius=36.0,
+        collider_offset=(-3, 14),
+
+        # A tetrahedron has no parallel faces, so it cannot rest with one face up: it
+        # sits on a face with a vertex at the top, and the number is read at that apex.
+        # `rest_quat` therefore has to bring the chosen face DOWN rather than up.
+        rest_face_down=True,
+
+        # Read off face_sheet.py. Each face carries three numerals and omits one, and
+        # the omitted one is what the die shows when it lands on that face -- true for
+        # both d4 conventions, since a face's own number is written on its neighbours
+        # and a vertex's number is written on the faces around it, not on the face
+        # opposite. Faces 0..3 carry {1,2,3}, {1,3,4}, {1,2,4}, {2,3,4}.
+        #
+        # There is no opposite-faces check to lean on here: a tetrahedron has no
+        # parallel faces. What does hold is that each value appears on exactly three
+        # faces, which this reading satisfies. Read it again if the geometry pass ever
+        # changes -- an earlier version centred the die on its bounding box, which put
+        # the face radii out and mixed up which glyph belonged to which face.
+        face_values=[4, 2, 3, 1],
+        face_twists=[0, 0, 0, 0],           # thirds of a turn; triangular faces
+        red_value=None,
+    ),
 }
 
 # Dice in the pack that are not being rendered yet (ROADMAP 8a). Recorded so the face
 # counts live in one place and nobody has to reopen the blend to look them up.
 DEFERRED = {
-    "d4": ("D4", 4), "d6n": ("D6 Numbered", 6), "d8": ("D8", 8),
-    "d10": ("D10", 10), "d10p": ("D10 Percentile", 10), "d12": ("D12", 12),
+    "d8": ("D8", 8), "d10": ("D10", 10), "d10p": ("D10 Percentile", 10),
+    "d12": ("D12", 12),
 }
 
 
@@ -138,9 +212,19 @@ def animations(cfg):
     return out
 
 
+def sheets_dir(cfg):
+    """Repo-relative directory holding one die's spritesheets.
+
+    A directory per die rather than one flat pile with a prefix on every filename:
+    forty-four sheets in one folder is hard to look at, and the prefix said nothing the
+    folder does not.
+    """
+    return "%s/%s" % (cfg["sheets_root"], cfg["name"])
+
+
 def sheet_path(cfg, animation):
     """Repo-relative path of the spritesheet backing one animation."""
-    return "%s/%s_%s_sprites.png" % (cfg["sheets_dir"], cfg["sheet_prefix"], animation)
+    return "%s/%s_sprites.png" % (sheets_dir(cfg), animation)
 
 
 def resource_uid(repo_relative):

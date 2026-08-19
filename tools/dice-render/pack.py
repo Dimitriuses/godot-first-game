@@ -58,7 +58,8 @@ if __name__ == "__main__":
     cfg = dice_config.die(name)
     work = dice_config.work_dir(name)
     frames_dir = os.path.join(work, "frames")
-    outdir = (os.path.join(ROOT, cfg["sheets_dir"].replace("/", os.sep)) if install
+    outdir = (os.path.join(ROOT, dice_config.sheets_dir(cfg).replace("/", os.sep))
+              if install
               else os.path.join(work, "sheets"))
 
     total = 0

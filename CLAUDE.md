@@ -177,9 +177,10 @@ why. Do not rebuild it without reading that first.
 - **`Play(name)` only rewinds when it changes clip.** Calling it for the animation already
   loaded resumes mid-way. `Dice.Roll()` therefore plays first and sets `Frame = 0` after.
 - **Setting `Frame` clears `FrameProgress`,** so set them in that order.
-- **`scenes/dice.tscn` and `scenes/d20.tscn` are generated — do not hand-edit them.** The
-  d6's holds 606 `AtlasTexture` sub-resources and the d20's 1,880: one roll clip of 91 frames
-  per face and two idle loops of 30, all at 30 fps, played by name from `Dice.cs`. Change
+- **Every die scene is generated — do not hand-edit them.** `dice.tscn` (the pipped d6),
+  `d20.tscn`, `d4.tscn` and `d6n.tscn` each hold one `AtlasTexture` sub-resource per frame:
+  606 for a d6, 1,880 for the d20. One roll clip of 91 frames per face and two idle loops of
+  30, all at 30 fps, played by name from `Dice.cs`. Change
   `tools/dice-render/dice_config.py` and run
   `python tools/dice-render/make_scene.py d6 --write`. Running it *without* `--write`
   compares against what is committed, which is the quick way to check nothing has drifted.
@@ -229,9 +230,10 @@ honest.
 
 ## Regenerating the die artwork
 
-`assets/dice/` is generated, not hand-drawn. The Blender pipeline lives in
-[tools/dice-render/](tools/dice-render/) and has its own README. It needs the CC0 source
-model, which is gitignored — see [docs/ASSETS.md](docs/ASSETS.md).
+`assets/dice/` is generated, not hand-drawn — a directory per die (`d4/`, `d6/`, `d6n/`,
+`d20/`), each holding one sheet per animation (`1_sprites.png`, `idle0_sprites.png`). The
+Blender pipeline lives in [tools/dice-render/](tools/dice-render/) and has its own README. It
+needs the CC0 source model, which is gitignored — see [docs/ASSETS.md](docs/ASSETS.md).
 
 ```sh
 python tools/dice-render/pipeline.py d20 --status          # what is on disk
@@ -243,10 +245,25 @@ time** — a d20's sub-frames come to about 2.2 GB if they all exist at once. `-
 up an interrupted run. Budget about a minute per landing clip: 48 for a whole d20.
 `dice_render.ipynb` is the same thing with previews.
 
-Two dice are rendered, a d6 and a d20; the other six in the pack are deferred on size
-(ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two tables, a run, and adding
-the generated scene to `DiceScenes` in `scenes/game.tscn`. **No game code changes** — that is
-what ROADMAP 8d was for.
+Four dice are rendered — a pipped d6, a d20, a d4 and a numbered d6; the other four in the
+pack are deferred on size (ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two
+tables, a run, and adding the generated scene to `DiceScenes` in `scenes/game.tscn`. **No
+game code changes** — that is what ROADMAP 8d was for.
+
+The two tables cannot be derived, so they are read by eye, once, off sheets the tool renders:
+
+```sh
+DICE_DIE=d10 blender "<the blend>" --background --python tools/dice-render/face_sheet.py
+python tools/dice-render/face_sheet.py --assemble d10          # face_values
+DICE_DIE=d10 blender "<the blend>" -b --python tools/dice-render/face_sheet.py -- --twists
+python tools/dice-render/face_sheet.py --assemble-twists d10   # face_twists
+python tools/dice-render/face_sheet.py --assemble-rest d10     # check the result
+python tools/dice-render/pipeline.py d10 --collider            # the collider that fits
+```
+
+`face_values` is machine-checked where it can be — opposite faces must sum to `faces + 1`,
+every value must appear once — so a misreading has to be a self-consistent conspiracy. The d4
+has no opposite faces and so no such check; read it twice.
 
 ## Conventions
 

@@ -47,6 +47,10 @@ YAW        = math.radians(-6) # slight turn; more than this pushes a face near e
 # a pixel at 128, and not worth a convex hull to remove.
 SILHOUETTE = 2.4007206052
 
+# How far off-centre a die has to be, as a fraction of its inradius, before
+# `recentre_on_faces` will move it. See that function for why this is not zero.
+TOLERANCE = 1e-2
+
 # Set per die by build_scene(): the height of the die's centre when it is resting on
 # the ground, which is its inradius once scaled. Everything vertical is expressed as
 # an offset from it.
@@ -69,6 +73,11 @@ BANDS = [(0.00, "darkest"), (0.14, "dark"), (0.38, "mid"), (0.65, "lit")]
 
 
 SCALE = 1.0     # set with REST_Z by build_scene()
+
+
+def rest_height():
+    """REST_Z as build_scene() left it, for callers that loaded this module by path."""
+    return REST_Z
 
 
 def srgb2lin(h):
@@ -100,6 +109,41 @@ def normalised_mesh(src):
 def presentation_scale(nm):
     """How much to enlarge this die so it reads the same size as the d6."""
     return SILHOUETTE / math.sqrt(sum(p.area for p in nm.polygons))
+
+
+def recentre_on_faces(nm, n_faces):
+    """Move the mesh so every numbered face is the same distance from the origin.
+
+    `normalised_mesh` centres on the bounding box, which is the centre for anything
+    centrally symmetric -- a cube, an octahedron, an icosahedron -- and measurably wrong
+    for anything that is not. A tetrahedron's bbox centre leaves its four face planes at
+    0.10 to 0.42 instead of all alike, which puts the rotation pivot off the middle of
+    the die (it wobbles), the resting height wrong, and the in-plane radii that decide a
+    face's corners inconsistent between congruent faces.
+
+    The point that fixes all three is the incentre: solve n_i . c + r = d_i for the
+    centre c and the common distance r, least squares over every face. Exactly
+    determined for a tetrahedron, overdetermined and already satisfied for the rest.
+
+    Applied only when it is worth something, hence TOLERANCE. For a centrally symmetric
+    solid the bounding-box centre already *is* the incentre and the solve returns pure
+    numerical noise -- the d20's answer is 4e-4 of its inradius against the d4's 1.0.
+    Moving by that noise is not free: `recessed_by_face` decides what is a glyph by an
+    absolute depth below the face plane, so nudging the planes flips borderline vertices
+    in and out of the masks and visibly re-inks the numerals. Measured: shifting the d20
+    by its noise changed 71,355 pixels of one landing clip.
+    """
+    import numpy as np
+    faces = face_planes(nm, n_faces)
+    a = np.array([[n.x, n.y, n.z, 1.0] for n, _d, _r, _v in faces])
+    b = np.array([d for _n, d, _r, _v in faces])
+    solved = np.linalg.lstsq(a, b, rcond=None)[0]
+    shift = Vector((float(solved[0]), float(solved[1]), float(solved[2])))
+    if shift.length <= TOLERANCE * abs(float(solved[3])):
+        return Vector((0.0, 0.0, 0.0))
+    for v in nm.vertices:
+        v.co = v.co - shift
+    return shift
 
 
 def face_planes(nm, n_faces):
@@ -211,42 +255,93 @@ def plane_basis(n):
     return u, n.cross(u).normalized()
 
 
-def corner_angle(nm, face):
-    """Where the face's corners point, as an angle in its own plane.
-
-    Averaging exp(3i*theta) over the rim picks out a triangle's three-fold symmetry
-    however the mesh happens to be ordered; the corners then sit at that angle and at
-    +/-120 degrees from it. Only meaningful for triangular faces, and only used when a
-    die has a `face_twists` table.
-    """
+def rim(nm, face, inner=0.5):
+    """The face's outer vertices, as (radius, angle) in its own plane."""
     n, _d, radius, verts = face
     u, w = plane_basis(n)
-    sc = ss = 0.0
+    out = []
     for i in verts:
         p = nm.vertices[i].co
         p = p - n * p.dot(n)
-        r = p.length
-        if r < radius * 0.5:
-            continue
-        th = math.atan2(p.dot(w), p.dot(u))
-        sc += r * math.cos(3 * th)
-        ss += r * math.sin(3 * th)
-    return math.atan2(ss, sc) / 3.0
+        if p.length >= radius * inner:
+            out.append((p.length, math.atan2(p.dot(w), p.dot(u))))
+    return out
 
 
-def face_roll(nm, face, candidate):
+def coherence(pts, m):
+    """How strongly a set of rim points repeats every 360/m degrees, from 0 to 1."""
+    sc = sum(r * math.cos(m * t) for r, t in pts)
+    ss = sum(r * math.sin(m * t) for r, t in pts)
+    return math.hypot(sc, ss) / (sum(r for r, _t in pts) or 1e-9)
+
+
+def face_symmetry(nm, face):
+    """How many corners the face has: 3 for the d4/d8/d20, 4 for a cube, 5 for a d12.
+
+    Measured rather than configured, and it is the *smallest* m that fits, not the
+    strongest. Strongest is unsound: a triangle's three corners are perfectly coherent
+    at m=6 as well as m=3, and a square's four at m=8, so taking the highest score
+    reports a d4 as six-sided.
+
+    Only the outermost vertices count. A triangle's edge midpoints sit at half its
+    circumradius and are three-fold coherent 60 degrees out of phase with its corners,
+    which cancels most of the signal -- including them scores a triangle 0.33 at m=3.
+    """
+    pts = rim(nm, face, inner=0.85)
+    for m in (3, 4, 5, 6):
+        if coherence(pts, m) > 0.7:
+            return m
+    raise SystemExit("cannot tell how many corners this face has: %s"
+                     % ", ".join("m=%d %.2f" % (m, coherence(pts, m)) for m in (3, 4, 5, 6)))
+
+
+def corner_angle(nm, face, m):
+    """Where the face's corners point, as an angle in its own plane.
+
+    Averaging exp(i*m*theta) over the rim picks out an m-sided face's symmetry however
+    the mesh happens to be ordered; the corners then sit at that angle and at multiples
+    of 360/m from it. Only used when a die has a `face_twists` table.
+
+    Takes the wide rim, unlike `face_symmetry` above. Non-corner vertices dilute the
+    signal but do not move its phase -- a triangle's edge midpoints are three-fold
+    coherent 180 degrees out, which subtracts from the magnitude and leaves the angle
+    alone. Measured across the pack the two cuts agree exactly on the d4 and the d6, and
+    to 2.6 degrees on the d20, well inside a 120-degree twist step. The wide one stays
+    because it is what rendered the d20 artwork that is already committed.
+    """
+    pts = rim(nm, face, inner=0.5)
+    sc = sum(r * math.cos(m * t) for r, t in pts)
+    ss = sum(r * math.sin(m * t) for r, t in pts)
+    return math.atan2(ss, sc) / m
+
+
+def face_base(normal, face_down):
+    """Rotation that brings a face's normal to the camera axis.
+
+    For the one face pointing straight away the rotation is ambiguous -- any axis in
+    the plane will do -- so it is pinned to a flip about +X, which is what the
+    axis-aligned lookup this replaced did.
+
+    `face_down` sends the normal to -Z instead of +Z. A tetrahedron has no parallel
+    faces, so a d4 cannot rest with one face up: it stands on a face with a vertex at
+    the top, and the number is read off the faces around that vertex.
+    """
+    target = Vector((0, 0, -1)) if face_down else Vector((0, 0, 1))
+    return (Quaternion(Vector((1, 0, 0)), math.pi) if normal.dot(target) < -0.9999
+            else normal.rotation_difference(target))
+
+
+def face_roll(nm, face, candidate, m, face_down):
     """Spin about the view axis that puts the chosen corner at the top of the screen.
 
-    Bringing a face normal to +Z leaves the spin about +Z free. For pips that does not
-    matter; for a numeral it decides whether the die reads "13" or something lying on
-    its side, so it has to be pinned.
+    Bringing a face normal to the camera axis leaves the spin about that axis free. For
+    pips that does not matter; for a numeral it decides whether the die reads "13" or
+    something lying on its side, so it has to be pinned.
     """
     n = face[0]
-    up = Vector((0, 0, 1))
-    base = (Quaternion(Vector((1, 0, 0)), math.pi) if n.dot(up) < -0.9999
-            else n.rotation_difference(up))
+    base = face_base(n, face_down)
     u, w = plane_basis(n)
-    ang = corner_angle(nm, face) + candidate * (2 * math.pi / 3)
+    ang = corner_angle(nm, face, m) + candidate * (2 * math.pi / m)
     screen = base @ (u * math.cos(ang) + w * math.sin(ang))
     return math.atan2(screen.x, screen.y)
 
@@ -301,7 +396,12 @@ def face_masks(nm, cfg):
     if twists is not None and len(twists) != n_faces:
         raise SystemExit("face_twists for %s has %d entries, need %d"
                          % (cfg["name"], len(twists), n_faces))
-    rolls = ([face_roll(nm, faces[k], twists[k]) for k in range(n_faces)]
+    down = cfg["rest_face_down"]
+    sym = cfg.get("face_symmetry") or face_symmetry(nm, faces[0])
+    if twists is not None and any(not 0 <= t < sym for t in twists):
+        raise SystemExit("face_twists for %s must be 0..%d on a %d-sided face"
+                         % (cfg["name"], sym - 1, sym))
+    rolls = ([face_roll(nm, faces[k], twists[k], sym, down) for k in range(n_faces)]
              if twists is not None else [0.0] * n_faces)
 
     return {counts[k]: (faces[k][0], rolls[k]) for k in range(n_faces)}
@@ -368,6 +468,7 @@ def build_scene():
 
     src = bpy.data.objects[SRC_OBJECT]
     nm = normalised_mesh(src)
+    recentre_on_faces(nm, N_FACES)
     values = face_masks(nm, CFG)
     mat, ramp = toon_material()
     nm.materials.append(mat)
@@ -404,20 +505,12 @@ def build_scene():
 def rest_quat(values, n):
     """Bring face `n` up to the camera, spin it upright, then apply the presentation yaw.
 
-    The minimal rotation from the face normal to +Z. For the one face pointing straight
-    away from the camera that rotation is ambiguous -- any axis in the plane will do --
-    so it is pinned to a flip about +X, which is what the axis-aligned lookup this
-    replaced did. That keeps the d6 rendering exactly as it did before.
-
     `roll` is the extra spin that makes a numeral read the right way up; it is zero for
     a pipped die, which has no particular way up. Both spins are about +Z so they add.
     """
     normal, roll = values[n]
-    normal = Vector(normal).normalized()
-    up = Vector((0, 0, 1))
-    base = (Quaternion(Vector((1, 0, 0)), math.pi) if normal.dot(up) < -0.9999
-            else normal.rotation_difference(up))
-    return Quaternion(up, YAW + roll) @ base
+    base = face_base(Vector(normal).normalized(), CFG["rest_face_down"])
+    return Quaternion(Vector((0, 0, 1)), YAW + roll) @ base
 
 
 # (f_start, f_end, z_start, z_end, apex), all heights *above the resting height* so

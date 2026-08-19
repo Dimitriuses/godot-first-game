@@ -1,14 +1,14 @@
 [gd_scene load_steps=619 format=3 uid="uid://ct6xq3adgo4q7"]
 
 [ext_resource type="Script" uid="uid://0e2op4qfb1lj" path="res://scripts/Dice.cs" id="script_0"]
-[ext_resource type="Texture2D" uid="uid://bko510nk6hi1f" path="res://assets/dice/dice_1_sprites.png" id="tex_1"]
-[ext_resource type="Texture2D" uid="uid://bgbb7yai6707a" path="res://assets/dice/dice_2_sprites.png" id="tex_2"]
-[ext_resource type="Texture2D" uid="uid://bawfujbcrk24n" path="res://assets/dice/dice_3_sprites.png" id="tex_3"]
-[ext_resource type="Texture2D" uid="uid://bmv4hsa513bcl" path="res://assets/dice/dice_4_sprites.png" id="tex_4"]
-[ext_resource type="Texture2D" uid="uid://r6o5l2yej07y" path="res://assets/dice/dice_5_sprites.png" id="tex_5"]
-[ext_resource type="Texture2D" uid="uid://b7d2tm7gwu1hw" path="res://assets/dice/dice_6_sprites.png" id="tex_6"]
-[ext_resource type="Texture2D" uid="uid://v4xp43pidc7d" path="res://assets/dice/dice_idle0_sprites.png" id="tex_idle0"]
-[ext_resource type="Texture2D" uid="uid://bl5rvtp25ldvg" path="res://assets/dice/dice_idle1_sprites.png" id="tex_idle1"]
+[ext_resource type="Texture2D" uid="uid://bko510nk6hi1f" path="res://assets/dice/d6/1_sprites.png" id="tex_1"]
+[ext_resource type="Texture2D" uid="uid://bgbb7yai6707a" path="res://assets/dice/d6/2_sprites.png" id="tex_2"]
+[ext_resource type="Texture2D" uid="uid://bawfujbcrk24n" path="res://assets/dice/d6/3_sprites.png" id="tex_3"]
+[ext_resource type="Texture2D" uid="uid://bmv4hsa513bcl" path="res://assets/dice/d6/4_sprites.png" id="tex_4"]
+[ext_resource type="Texture2D" uid="uid://r6o5l2yej07y" path="res://assets/dice/d6/5_sprites.png" id="tex_5"]
+[ext_resource type="Texture2D" uid="uid://b7d2tm7gwu1hw" path="res://assets/dice/d6/6_sprites.png" id="tex_6"]
+[ext_resource type="Texture2D" uid="uid://v4xp43pidc7d" path="res://assets/dice/d6/idle0_sprites.png" id="tex_idle0"]
+[ext_resource type="Texture2D" uid="uid://bl5rvtp25ldvg" path="res://assets/dice/d6/idle1_sprites.png" id="tex_idle1"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_0"]
 bounce = 0.6

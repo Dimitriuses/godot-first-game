@@ -12,7 +12,7 @@ public partial class DiceHud : Control
 		public Dice Die;
 		public int Id;
 		public int Value;
-		public int Faces;
+		public string Name;
 	}
 
 	/// Where the hover tag sits relative to the cursor. Down and right, so the pointer
@@ -77,7 +77,7 @@ public partial class DiceHud : Control
 			return;
 		}
 
-		valueTagLabel.Text = $"d{entry.Faces} #{entry.Id}   {entry.Value}";
+		valueTagLabel.Text = $"{entry.Name} #{entry.Id}   {entry.Value}";
 		valueTag.ResetSize();       // a PanelContainer outside a container keeps its old size
 		valueTag.Visible = true;
 
@@ -98,10 +98,16 @@ public partial class DiceHud : Control
 	{
 		entries[die] = new DieEntry
 		{
-			Die = die, Id = id, Value = value, Faces = die.FaceCount
+			Die = die, Id = id, Value = value, Name = NameOf(die)
 		};
 		Refresh();
 	}
+
+	/// What to call a die in the list. The same name the palette offers it under, so a
+	/// row and a drawer entry can be matched up -- and so the pipped and numbered d6,
+	/// which have the same face count, do not both come out "d6".
+	private static string NameOf(Dice die) =>
+		string.IsNullOrEmpty(die.DieLabel) ? $"d{die.FaceCount}" : die.DieLabel;
 
 	public void UpdateValue(Dice die, int value)
 	{
@@ -281,7 +287,7 @@ public partial class DiceHud : Control
 		{
 			// "d6 #3", not "D3": with more than one die type on the board, D<n> reads
 			// as the die's kind and collides with the d6/d20 the label is next to.
-			Text = $"d{entry.Faces} #{entry.Id}    {entry.Value}",
+			Text = $"{entry.Name} #{entry.Id}    {entry.Value}",
 			SizeFlagsHorizontal = SizeFlags.ExpandFill,
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = MouseFilterEnum.Ignore
@@ -293,7 +299,7 @@ public partial class DiceHud : Control
 			Text = "×",
 			CustomMinimumSize = new Vector2(38, 30),
 			FocusMode = FocusModeEnum.None,
-			TooltipText = $"Remove d{entry.Faces} #{entry.Id}"
+			TooltipText = $"Remove {entry.Name} #{entry.Id}"
 		};
 		remove.Pressed += () => DeleteRequested?.Invoke(entry.Die);
 		row.AddChild(remove);

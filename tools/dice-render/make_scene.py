@@ -95,7 +95,12 @@ def generate(cfg):
           'AnimatedSprite = NodePath("AnimatedSprite2D")\n'
           'CollisionShape = NodePath("CollisionShape2D")'
         % (_num(cfg["gravity_scale"]), cfg["center_of_mass_mode"], cfg["freeze_mode"],
-           cfg["continuous_cd"], _num(cfg["linear_damp"])))
+           cfg["continuous_cd"], _num(cfg["linear_damp"]))
+        # Written only when it differs from what the palette works out on its own, so
+        # adding it changes no scene that did not need it. Two dice of the same face
+        # count would otherwise both be offered as "D6".
+        + ('\nDieLabel = "%s"' % cfg["label"]
+           if cfg["label"] != "d%d" % cfg["faces"] else ""))
     body.append('[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]\n'
                 'sprite_frames = SubResource("SpriteFrames_0")\n'
                 'animation = &"1"\n'

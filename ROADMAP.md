@@ -146,7 +146,7 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — ✅ done for the d20, August 2026
+## 8. Add the rest of the dice from the pack — in progress, four of eight done
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
 solids, of which one is done:
@@ -154,8 +154,8 @@ solids, of which one is done:
 | Object | Faces | State |
 |---|---|---|
 | `D6 Dotted` | 6 | **done** — the die the project started with |
-| `D4` | 4 | not started |
-| `D6 Numbered` | 6 | not started |
+| `D4` | 4 | **done**, August 2026 |
+| `D6 Numbered` | 6 | **done**, August 2026 |
 | `D8` | 8 | not started |
 | `D10` | 10 | not started |
 | `D10 Percentile` | 10 | not started, and needs its own value handling |
@@ -164,9 +164,10 @@ solids, of which one is done:
 
 **76 faces in total.** That number is the whole problem, so start there.
 
-The d20 shipped in August 2026 at 11.85 MB, close to 8a's 11.1 MB estimate. The six
-remaining dice are deferred, not dropped: each is an entry in `dice_config.py` and a
-render run.
+Four have shipped, at **21.62 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06)
+and the numbered d6 (3.10). The estimates in 8a held — the d20 was predicted at 11.1 MB.
+The four still missing are deferred, not dropped: each is an entry in `dice_config.py`,
+two tables read off a contact sheet, and a render run.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -371,7 +372,8 @@ Around it:
   from its face count, the icon from the last frame of its `1` clip. There is no per-die
   artwork to keep in step.
 - `DiceHud` labels dice `d6 #1` — the kind, then the sequence number. The old `D{Id}` read as
-  die-kind notation the moment a d20 existed.
+  die-kind notation the moment a d20 existed. Deriving the kind from the face count lasted
+  until two dice shared one; see 8g.
 
 **One thing the item did not anticipate: the release-frame mapping was about to become
 unfair.** `ChooseResult` mapped the integer frame index onto a face, and six faces over a
@@ -472,6 +474,69 @@ in-engine checks cover the d20 end to end: 20 clips at 91 frames, both idles, ev
 frame resolving to a real 128 px atlas region, rolling reaching all 20 faces, the palette
 building two entries, and `SpawnDie` putting a d20 on the board.
 
+### 8g. The d4 and the numbered d6 — ✅ done, August 2026
+
+The first dice added after the tooling was declared finished, and the point of them was to
+find out whether it really was. Mostly: both are a config entry, two tables read by eye, and
+`pipeline.py <die> --run --install --scene`. Three things did need building, and one was a
+real bug in what had already shipped.
+
+**The d4 has no parallel faces**, so it cannot rest with one face up — it stands on a face
+with a vertex at the top. `rest_face_down` sends the chosen face to −Z instead of +Z. It is
+also a *missing-numeral* die: each face carries three numerals and omits one, and the omitted
+one is what the die shows when it lands on that face. That holds under either d4 convention,
+which is worth knowing because this model is bottom-read and the apex-read reading gives the
+same table. There is no opposite-faces check to lean on — a tetrahedron has none — but each
+value appearing on exactly three faces is a real constraint and the reading satisfies it.
+
+**The die was being centred on its bounding box.** That is the true centre for anything
+centrally symmetric, and it is how every die had been normalised since the pipeline was
+written. For a tetrahedron it is wrong by a quarter of the die: the d4's four face planes sat
+at 0.10 to 0.42 from the origin instead of all alike. That put the rotation pivot off centre,
+the resting height wrong, and — because face radii decide which recessed vertices belong to
+which face — **glyphs assigned to the wrong faces**. The first reading of the d4's contact
+sheet was wrong because of it. `recentre_on_faces` now solves the incentre exactly:
+`nᵢ·c + r = dᵢ`, least squares over every face.
+
+It is applied only above a tolerance, which is not a fudge. For a centrally symmetric solid
+the solve returns numerical noise — 4e-4 of the d20's inradius against 1.0 of the d4's — and
+moving by that noise is not free, because `recessed_by_face` decides what is a glyph by an
+absolute depth below the face plane. Measured: shifting the d20 by its own noise re-inked the
+numerals enough to change **71,355 pixels** of one landing clip. The d20 now re-renders
+byte-identical, and so does the d6.
+
+**Face symmetry is measured, and the first rule for it was unsound.** A square face has four
+ways up and a triangle three, so `face_twists` needed to stop assuming three. Scoring how
+strongly the rim repeats every 360/m degrees and taking the strongest reports a triangle as
+six-sided — three corners are perfectly six-fold coherent as well as three-fold. It is the
+*smallest* m that fits, over corner vertices only.
+
+Two smaller things:
+
+- **`face_sheet.py` had been broken since the nearest-plane fix** in 8b: `face_planes()` grew
+  a fourth element and the unpack was never updated. It had not been run since. It now also
+  renders two sheets it did not before — every value at its resting pose through the game
+  camera, and every value at every twist. The second is what `face_twists` is read off; the
+  flat-on sheet cannot show it, because it presents every face the same way up by
+  construction.
+- **A die may carry its own palette name.** The label was derived from the face count, which
+  works until two dice have the same one: the pipped and numbered d6 both came out "d6".
+  `Dice.DieLabel` overrides it, written into the scene only when it differs from the derived
+  name, so no existing scene changed. The palette and the die list now use the same name.
+
+**The numbered d6 renders smaller than the pipped one — 48 px across at rest against 58 —
+and there is no choice about it.** A numeral is upright at exactly one rotation about the
+vertical, which pins that cube face-forward; the pipped d6's pips have no way up, so its
+rotation is free and it stands corner-forward, and a cube is 1.4× wider across its corners
+than across its faces. All four twists give an identical silhouette, so no other twist
+recovers the size. Only tilting every numeral 45° would, which is worse.
+
+**The d4 renders larger — 70 px — and that is the silhouette rule working.** It equalises the
+*mean* silhouette over all orientations, and a tetrahedron is the least spherical solid in the
+pack, so matching on average leaves it chunkier at rest. Colliders now follow the drawn die:
+`pipeline.py <die> --collider` measures the resting sprite and reports the circle that fits,
+by a rule that reproduces the d6's and the d20's shipped numbers.
+
 ### What it took, in order
 
 1. Decide 8a. Nothing else was worth doing until the size question had an answer.
@@ -483,7 +548,7 @@ building two entries, and `SpawnDie` putting a d20 on the board.
 6. Render the d20 (8f).
 
 Adding the d10 is now steps 4 and 6: read its tables off `face_sheet.py`, then
-`pipeline.py d10 --run --install --scene`.
+`pipeline.py d10 --run --install --scene`. That is what 8g measured, and it mostly held.
 
 ## 9. A browser demo, via a hand-written GDScript port — planned, not started
 

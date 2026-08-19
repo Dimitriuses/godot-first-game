@@ -42,13 +42,16 @@ If you are the author, please open an issue and it will be credited or removed.
 
 ## `assets/dice/` — CC0 source, rendered for this repository
 
-The thirty spritesheets that make up the two dice were **rendered for this repository in
-August 2026** from a public-domain 3D model:
+The forty-four spritesheets that make up the four dice were **rendered for this repository in
+August 2026** from a public-domain 3D model. Each die has a directory of its own holding one
+1280×1280 landing sheet per face — `1_sprites.png` … — and two 1280×384 idle loops:
 
-| | sheets | size |
+| | | size |
 |---|---|---|
-| d6 | `dice_1_sprites.png` … `dice_6_sprites.png` at 1280×1280, two idle loops at 1280×384 | 3.61 MB |
-| d20 | `d20_1_sprites.png` … `d20_20_sprites.png` at 1280×1280, two idle loops at 1280×384 | 11.85 MB |
+| d6, pipped | `assets/dice/d6/` | 3.61 MB |
+| d20 | `assets/dice/d20/` | 11.85 MB |
+| d4 | `assets/dice/d4/` | 3.06 MB |
+| d6, numbered | `assets/dice/d6n/` | 3.10 MB |
 
 The source is **Blend Swap blend #82440, "Dices (D20, D12, D8, D10, D8, D6, D4)"**, released
 under [Creative Commons Zero 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The
@@ -60,9 +63,9 @@ model in `assets/Dice D20 D12 D8 D10 D8 D6 D4/`:
 > requirements: **There are no requirements for this license.**
 
 CC0 imposes no conditions, so no attribution is owed. It is given here anyway, as it is for
-Kenney above. The `D6 Dotted` and `D20` objects are used; the same pack also holds a D4, D8,
-D10, D10-percentile, D12 and a numbered D6, under the same terms — which is what makes the
-remaining dice cheap to add later. What stops them being added today is size, not licence:
+Kenney above. The `D6 Dotted`, `D20`, `D4` and `D6 Numbered` objects are used; the same pack
+also holds a D8, a D10, a percentile D10 and a D12, under the same terms — which is what makes
+the remaining dice cheap to add. What stops them being added today is size, not licence: all
 76 faces would come to about 44 MB of PNGs (ROADMAP 8a).
 
 ### How they were rendered

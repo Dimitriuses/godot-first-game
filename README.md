@@ -4,8 +4,8 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Drag a **d6** or a **d20** from the right-side palette, sling them across a pixel-art board,
-and let go — they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
+Drag a **d4**, **d6** or **d20** from the right-side palette, sling them across a pixel-art
+board, and let go — they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
 2025 while learning the engine's 2D physics: `RigidBody2D`, `PinJoint2D` mouse dragging,
 `Area2D` bounds detection and `AnimatedSprite2D`.
 
@@ -90,7 +90,8 @@ scripts/    GameManager.cs   drag/release, respawn, bounds handling
             DicePalette.cs   right-side drag-to-spawn dice menu
             DiceHud.cs       sorted die values, total and deletion controls
             Player.cs        board-piece stub, unused (board game dropped)
-assets/     dice/            die animation frames  (see docs/ASSETS.md)
+assets/     dice/d4 d6 d6n d20   die animation frames, one folder each
+                             (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
 tools/      dice-render/     offline Blender pipeline that produces assets/dice/
@@ -172,10 +173,10 @@ machine after the drag work left it freezing on a single frame — the cause was
 code built on top of that had been fighting a stall it was itself causing.
 
 Then the die-rendering pipeline was generalised off the d6 it had been written for, and a
-**d20** was added (ROADMAP 8). Nothing in the game knows a face count: `Dice.cs` counts a
-die's faces from its own animation clips, the palette derives each entry's label and icon
-from the die itself, and adding another is an entry in `tools/dice-render/dice_config.py`
-plus a render run.
+**d20**, a **d4** and a **numbered d6** were added (ROADMAP 8). Nothing in the game knows a
+face count: `Dice.cs` counts a die's faces from its own animation clips, the palette and the
+die list name each one from the die itself, and adding another is an entry in
+`tools/dice-render/dice_config.py`, two tables read off a contact sheet, and a render run.
 
 ## Licence
 

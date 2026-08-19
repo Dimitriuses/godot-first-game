@@ -64,7 +64,7 @@ def status(cfg, work):
                          composited=nfr, complete=nfr == nframes, sheet=sheet,
                          packed=os.path.exists(os.path.join(work, "sheets", sheet)),
                          installed=os.path.exists(
-                             os.path.join(ROOT, cfg["sheets_dir"], sheet))))
+                             os.path.join(ROOT, dice_config.sheets_dir(cfg), sheet))))
     return rows
 
 
@@ -79,6 +79,35 @@ def print_status(cfg, work):
               % (r["clip"], r["tag"], r["subframes"] or "-",
                  "%d/%d" % (r["composited"], r["frames"]),
                  "yes" if r["packed"] else "-", "yes" if r["installed"] else "-"))
+
+
+def collider(cfg):
+    """Measure the resting sprite and report the collider that fits it.
+
+    The circle is an approximation of a silhouette that is never circular, so the rule
+    is the mean of the half-width and half-height plus the pixel and a half of margin
+    the d6 has always carried. That rule reproduces the d6's and the d20's shipped
+    numbers, which is the only reason to trust it on a new die.
+    """
+    from PIL import Image
+    import numpy as np
+    rows = []
+    cell, cols, last = cfg["cell"], cfg["cols"], cfg["roll_frames"] - 1
+    for v in range(1, cfg["faces"] + 1):
+        path = os.path.join(ROOT, dice_config.sheet_path(cfg, str(v)).replace("/", os.sep))
+        if not os.path.exists(path):
+            return None
+        im = np.asarray(Image.open(path).convert("RGBA"), np.uint8)
+        r, c = divmod(last, cols)
+        a = im[r * cell:(r + 1) * cell, c * cell:(c + 1) * cell, 3] > 24
+        ys, xs = np.where(a)
+        rows.append((xs.min(), xs.max(), ys.min(), ys.max()))
+    w = sum(r[1] - r[0] + 1 for r in rows) / len(rows)
+    h = sum(r[3] - r[2] + 1 for r in rows) / len(rows)
+    cx = sum((r[0] + r[1]) / 2 for r in rows) / len(rows) - (cell - 1) / 2
+    cy = sum((r[2] + r[3]) / 2 for r in rows) / len(rows) - (cell - 1) / 2
+    return dict(width=w, height=h, radius=round((w + h) / 4 + 1.5),
+                offset=(round(cx), round(cy) - 2))
 
 
 def run(cmd, env=None):
@@ -116,6 +145,8 @@ def main():
     ap.add_argument("die", nargs="?", default="d6")
     ap.add_argument("--run", action="store_true", help="actually render")
     ap.add_argument("--status", action="store_true", help="report and stop")
+    ap.add_argument("--collider", action="store_true",
+                    help="measure the installed sheets and report the collider that fits")
     ap.add_argument("--only", default="", help="comma separated clip names")
     ap.add_argument("--red", help="face value to tint red, or 'none'")
     ap.add_argument("--keep", action="store_true",
@@ -131,6 +162,15 @@ def main():
 
     cfg = dice_config.die(a.die)
     work = dice_config.work_dir(a.die)
+
+    if a.collider:
+        m = collider(cfg)
+        if m is None:
+            sys.exit("%s has no installed sheets to measure" % a.die)
+        print("%s resting sprite %.0fx%.0f px" % (a.die, m["width"], m["height"]))
+        print("  collider_radius=%.1f  (config has %.1f)" % (m["radius"], cfg["collider_radius"]))
+        print("  collider_offset=%s  (config has %s)" % (m["offset"], cfg["collider_offset"]))
+        return
 
     if a.status:
         print("%s -> %s" % (a.die, work))
@@ -154,7 +194,7 @@ def main():
     print("red glyph  %s" % (red if red is not None else "none"))
     print("work       %s" % work)
     print("sub-frames %s" % ("kept" if a.keep else "pruned after compositing"))
-    print("install    %s" % ("yes -> %s/" % cfg["sheets_dir"]
+    print("install    %s" % ("yes -> %s/" % dice_config.sheets_dir(cfg)
                              if a.install or a.scene else "no"))
     print("scene      %s" % (cfg["scene"] if a.scene else "not regenerated"))
     if not a.run:

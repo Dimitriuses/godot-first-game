@@ -150,13 +150,16 @@ public partial class DicePalette : Control
 	private static (string, Texture2D) DescribeDie(PackedScene scene)
 	{
 		var probe = scene.Instantiate<Dice>();
-		int faces = probe.FaceCount;
+		// The face count names the die unless it cannot: a pipped and a numbered d6
+		// both have six, so a die may carry its own label to break the tie.
+		string label = string.IsNullOrEmpty(probe.DieLabel)
+			? $"d{probe.FaceCount}" : probe.DieLabel;
 		Texture2D icon = null;
 		SpriteFrames frames = probe.AnimatedSprite?.SpriteFrames;
 		if (frames != null && frames.HasAnimation("1"))
 			icon = frames.GetFrameTexture("1", frames.GetFrameCount("1") - 1);
 		probe.Free();               // never entered the tree, so Free not QueueFree
-		return ($"D{faces}", icon);
+		return (label, icon);
 	}
 
 	private void OnDieButtonInput(InputEvent @event, PackedScene scene, Texture2D icon)
