@@ -1,8 +1,8 @@
 [gd_scene load_steps=18 format=4 uid="uid://df18iimniwnuv"]
 
 [ext_resource type="Script" uid="uid://dmgv4pbm2a6no" path="res://scripts/GameManager.cs" id="1_uwrxv"]
-[ext_resource type="PackedScene" path="res://scenes/d4.tscn" id="2_d4scn"]
-[ext_resource type="PackedScene" path="res://scenes/d6n.tscn" id="2_d6nsc"]
+[ext_resource type="PackedScene" uid="uid://ckuwfsdjywlmh" path="res://scenes/d4.tscn" id="2_d4scn"]
+[ext_resource type="PackedScene" uid="uid://bkk1sn4g0pswk" path="res://scenes/d6n.tscn" id="2_d6nsc"]
 [ext_resource type="PackedScene" uid="uid://c0v46k6vajc7y" path="res://scenes/d20.tscn" id="2_d20sc"]
 [ext_resource type="PackedScene" uid="uid://ct6xq3adgo4q7" path="res://scenes/dice.tscn" id="2_yqjtg"]
 [ext_resource type="Texture2D" uid="uid://cxbb47wwhiv6v" path="res://assets/petixel-prototype/prototype-characters.png" id="3_iywne"]

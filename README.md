@@ -21,7 +21,7 @@ board, and let go — they tumble, land, and report a number. My first project i
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
 | **Hold Shift, then drag a die** | select and throw every die together |
-| **Space** | throw every die — they scatter across the board as well as rolling |
+| **Space** | throw every die — they scatter across the board as well as rolling, including any still mid-roll |
 | **Hover a die on the board** | a small tag by the cursor names it and the number it is showing |
 | **Total button** | open or close the bottom-left die list |
 | **Hover a die-list row** | highlight its die on the board |

@@ -210,12 +210,16 @@ public partial class Dice : RigidBody2D
 	/// <summary>
 	/// Throw the die across the board and roll it. This is what the Space key does:
 	/// the dice scatter as well as animating, rather than tumbling on the spot.
+	///
+	/// A die already in the air is thrown again rather than skipped. Sharing
+	/// <see cref="Roll"/>'s guard meant a board of dice split into two groups that
+	/// could never be brought back together: every press threw whichever group was
+	/// resting and passed over whichever was mid-clip, so they alternated forever.
+	/// The guard is still right for a collision, which should not restart a roll that
+	/// is already running; it is wrong for someone asking for a throw.
 	/// </summary>
 	public void Throw()
 	{
-		if (isRolling)
-			return;
-
 		float angle = Random.Shared.NextSingle() * Mathf.Tau;
 		float speed = Random.Shared.NextSingle() * (ThrowSpeedMax - ThrowSpeedMin)
 			+ ThrowSpeedMin;
@@ -223,16 +227,21 @@ public partial class Dice : RigidBody2D
 		Freeze = false;
 		LinearVelocity = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * speed;
 		AngularVelocity = (Random.Shared.NextSingle() * 2f - 1f) * ThrowSpinMax;
-		Roll();
+		Roll(restart: true);
 	}
 
 	/// <summary>
 	/// Play a roll. The face comes from where the die was in its tumble when this
 	/// was called, plus a random nudge; the clip picks up from that same frame.
 	/// </summary>
-	public void Roll()
+	/// <param name="restart">
+	/// Roll a die that is already rolling, from the top. Off by default, so a die
+	/// knocked about mid-clip keeps the throw it is in the middle of; on for an
+	/// explicit throw, which has to reach every die or the board drifts out of phase.
+	/// </param>
+	public void Roll(bool restart = false)
 	{
-		if (isRolling)
+		if (isRolling && !restart)
 			return;
 
 		float releasePos = CurrentIdlePosition();

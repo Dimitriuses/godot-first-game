@@ -126,6 +126,11 @@ tumbling when held motionless, release rolling vs. not rolling, the roll running
 frame and emitting `DiceRolled` exactly once, grabbing a die mid-roll, and a second `Roll()`
 being ignored while one is in flight.
 
+**`Roll()` declines while a roll is running; `Throw()` restarts it.** The guard is there so a
+die knocked about mid-clip finishes the throw it is in, and the Space key has to get past it or
+a board of dice drifts permanently out of phase — see KNOWNISSUES 3. Anything that adds a new
+way to start a roll has to decide which of the two it is.
+
 **Assert engine behaviour you are relying on, not just your own code.** Several checks in
 that run existed purely to pin down what `AnimatedSprite2D` actually does, and one of them is
 what found the original bug.

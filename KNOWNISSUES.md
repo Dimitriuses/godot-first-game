@@ -67,6 +67,16 @@ there is no idle state for `_PhysicsProcess` to observe and act on. Rolls now st
 exactly three places: releasing a die that was being agitated, a hard enough die-to-die
 collision, and the Space key.
 
+**One of those three had to stop sharing the guard, August 2026.** A roll in flight refuses to
+be restarted, which is right for a collision — a die bumped mid-clip should finish the throw it
+is in, not stutter — and wrong for the Space key, which is somebody asking for a throw. With
+several dice on the board it split them into two groups that could never be brought back
+together: each press threw whichever group was resting and passed over whichever was mid-clip,
+so they alternated indefinitely. Reproduced in a harness before it was touched — Space skipping
+the one die at frame 32, then skipping the other four at frame 72 — and `Throw()` now restarts
+a roll rather than declining. `Roll()` on its own still declines, and the collision path still
+calls it that way.
+
 ## 4. The die tunnels through the walls on fast throws — fixed, August 2026
 
 **Fixed by one line:** `continuous_cd = 1` (`CCD_MODE_CAST_RAY`) on the `RigidBody2D` in
