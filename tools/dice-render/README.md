@@ -17,31 +17,61 @@ re-run this.
 
 ## Running it
 
-Needs Blender 4.4+ and Python with `pillow` and `numpy`.
+Needs Blender 4.4+ and Python with `pillow` and `numpy`. `pipeline.py` drives the whole
+thing; the individual stages below still run on their own if you want one of them.
+
+```sh
+python tools/dice-render/pipeline.py d20                     # dry run: what it would do
+python tools/dice-render/pipeline.py d20 --run               # render, composite, pack
+python tools/dice-render/pipeline.py d20 --run --install --scene
+python tools/dice-render/pipeline.py d20 --status            # what is already on disk
+```
+
+Nothing lands in the repository until `--install` (sheets into `assets/dice/`) and
+`--scene` (regenerate the die's `.tscn`). Everything before that stays in
+`tools/dice-render/build/<die>/`, which is gitignored.
+
+Useful flags:
+
+| | |
+|---|---|
+| `--only 3,idle0` | just those clips, named as the game names them |
+| `--resume` | skip clips already composited — an interrupted run continues |
+| `--red 20` | tint that face's glyph red for this run; `--red none` for no tint |
+| `--keep` | keep the 512px sub-frames instead of pruning as it goes |
+| `--blender <path>` | if it is not where `BLENDER_CANDIDATES` expects |
+
+**It renders one clip at a time, on purpose.** A d20's sub-frames are about 2.2 GB if they
+all have to exist at once; compositing and pruning each clip before starting the next keeps
+the peak near a twentieth of that, and makes the run resumable. Roughly a minute per
+landing clip, so about 45 minutes for a d20.
 
 ### Jupyter notebook (Windows)
 
-Open `dice_render.ipynb`, run the setup cell, and then run the pipeline cell. The notebook
-asks you to type `RUN` before every stage; opening it does not execute anything. Update the
-`BLENDER` path in the setup cell if Blender is installed elsewhere.
+`dice_render.ipynb` is a wrapper over the same script: pick the die in cell 2, render one
+clip in cell 4 and look at it, run the rest in cell 5, install in cell 7. Opening it
+executes nothing, and the two cells that cost something ask first. Cell 6 previews any
+clip, and prints every face's resting frame in a row — which is how you check a
+`face_values` table.
+
+### The stages on their own
 
 ```sh
 export DICE_WORK=/tmp/dice-build          # optional; defaults to ./build
+                                          # a die always gets its own subdirectory
 
-# 1. render crisp sub-frames  (~5 min, ~4900 renders at 512px)
-& blender.exe `
-  "assets\Dice D20 D12 D8 D10 D8 D6 D4\Dices blendswap.blend" `
-  --background `
-  --python "tools\dice-render\render.py"
+# 1. render crisp sub-frames  (DICE_DIE picks the die, DICE_ONLY picks clips)
+DICE_DIE=d20 DICE_ONLY=face3 blender.exe   "assets/Dice D20 D12 D8 D10 D8 D6 D4/Dices blendswap.blend"   --background --python tools/dice-render/render.py
 
-# 2. accumulate them into motion-blurred 128px frames  (~2 min)
-python tools/dice-render/composite.py
+# 2. accumulate them into motion-blurred 128px frames
+python tools/dice-render/composite.py --die d20 face3
 
 # 3. pack to spritesheets and drop them into assets/dice/
-python tools/dice-render/pack.py --install
+python tools/dice-render/pack.py --die d20 --install
 
-# 4. check the scene still lines up with the sheets
-python tools/dice-render/validate.py
+# 4. write the scene, then check it lines up with the sheets
+python tools/dice-render/make_scene.py d20 --write
+python tools/dice-render/validate.py d20
 ```
 
 Step 1 builds a throwaway scene called `DiceRender` inside the open file. It does not
@@ -51,10 +81,29 @@ modify the source model and does not save the `.blend`.
 
 | | |
 |---|---|
-| `render.py` | Builds the toon material and camera, then renders each output frame as up to 20 crisp samples across its shutter interval. Numbered-roll samples go to `build/faces/face#`; idle samples go to `build/idle#`. Writes a `meta.json` per animation recording the sub-frame count and the ground-shadow position for each sample. |
+| `pipeline.py` | Drives the other five, one clip at a time, with `--resume` and `--status`. The thing to run. |
+| `render.py` | Builds the toon material and camera, then renders each output frame as up to 20 crisp samples across its shutter interval, into `build/<die>/faces/<clip>/`. Writes a `meta.json` per animation recording the sub-frame count and the ground-shadow position for each sample. `DICE_DIE`, `DICE_ONLY` and `DICE_RED` select the die, the clips and the tinted face. |
 | `composite.py` | Per sub-frame: shadow, then an alpha-dilated black outline, then the die. Averages the sub-frames — that average *is* the motion blur — then box-downsamples 512→128. |
-| `pack.py` | Lays frames out 10 per row into the sheets `dice.tscn` indexes. |
-| `validate.py` | Re-reads `dice.tscn` and checks every atlas region against the PNGs on disk. |
+| `pack.py` | Lays frames out `cols` per row into the sheets the die's scene indexes. |
+| `make_scene.py` | Writes a die's `.tscn` from `dice_config.py` plus the sheets on disk — 606 atlas regions for the d6, ~2,000 for a d20. Run without `--write` it *compares* instead, field by field, against the scene already committed. |
+| `dice_config.py` | The per-die table: source object, face count, sheet prefix, scene path and uid, cell size, fps and the whole `RigidBody2D` setup. Adding a die is an entry here. |
+| `validate.py` | Re-reads a die's `.tscn` and checks every atlas region against the PNGs on disk. |
+
+## Generating the scene
+
+`scenes/dice.tscn` is **generated, not hand-edited** (ROADMAP 8e):
+
+```sh
+python tools/dice-render/make_scene.py d6            # compare against what is committed
+python tools/dice-render/make_scene.py d6 --write    # write it
+```
+
+The comparison is the one to run most often: the generator's claim to being correct is that
+it reproduces the scene it replaced, so it checks textures, animation names, loop flags,
+speeds, every frame's atlas region, every sub-resource and every node property.
+
+To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and run
+`make_scene.py <name> --write`. Nothing in the generator knows about six-sidedness.
 
 ## Things worth knowing before changing it
 
@@ -67,25 +116,81 @@ modify the source model and does not save the `.blend`.
   the vertices actually recessed below the face plane instead.
 - **The pip counts are read off the geometry**, not hardcoded, so `rest_quat()` knows which
   way to turn the die without anyone asserting "1 is on -Z".
+- **Per-face throw variation is generated, not tuned.** Twenty landing clips that read as one
+  clip played twenty times would be worse than none, and twenty sets of hand-picked numbers
+  are not worth anyone's afternoon, so `throw_params()` spreads turn count, tumble axes and
+  drift over the ranges the d6's six occupy, using a low-discrepancy sequence rather than
+  random draws. The d6 pins its six in `face_throws` because its artwork is already shipped.
 - **Sub-frame count scales with angular speed** (`deg_per_sub`), so slow frames near the
   landing cost one render and fast ones cost twenty. Dropping `max_sub` below about 16
   brings back visible ghosting on the first few frames.
+- **Dice are scaled to equal *mean silhouette*, not to equal bounding box.** `normalised_mesh`
+  fits every die into a unit cube, which sounds like the same size and is not: a cube fills
+  its bounding box and an icosahedron does not, so a d20 normalised that way came out 42px
+  across against the d6's 58px. Cauchy's formula says a convex body's mean projected area
+  over all orientations is exactly a quarter of its surface area, so `presentation_scale()`
+  divides by `sqrt(area)`, calibrated to leave the d6 at exactly 1.0. The d20 lands at 1.447
+  and measures 58x62 at rest against the d6's 58x62. The scale is applied to the *object*,
+  not the mesh — the geometry pass works in absolute distances below a face plane, so
+  resizing the mesh under it would change which vertices count as glyphs.
+- **`REST_Z` is per die**, the inradius times that scale, and every height in `SEGS` is an
+  offset above it. A die that is drawn bigger rests higher, or it sinks into the board.
 - **The camera is orthographic.** `ortho_scale` controls framing without introducing
   perspective convergence as the die moves toward or away from the camera.
 - **Both idle loops match the opening speed of a numbered roll.** `idle1` additionally
   cycles through the original animation's rainbow hues as a seamless colour gradient.
-- **Frame counts are load-bearing.** `dice.tscn` holds 91 frames per face and 30 per idle
-  loop, and `Dice.cs` plays them by name. Changing the counts means regenerating the atlas
-  regions in the scene, not just the sheets.
+- **Frame counts are load-bearing.** Each die's scene holds 91 frames per face and 30 per
+  idle loop, and `Dice.cs` plays them by name. Changing the counts means regenerating the
+  atlas regions in the scene, not just the sheets.
+- **A generated scene has no uid unless you give it one.** Godot mints uids on import from
+  the editor; a `.tscn` written by a script does not get one, and `game.tscn` refers to these
+  scenes by uid. `scene_uid` in the config holds one minted with `ResourceUID.create_id()`,
+  and it has to stay put across regenerations.
 
-## Adding the other dice (ROADMAP 6b)
+## Adding the other dice (ROADMAP 8)
 
-`SRC_OBJECT` picks which object in the pack to render, and the pack also holds a D4, D8,
-D10, D10-percentile, D12, D20 and a numbered D6.
+`dice_config.py` holds the per-die table. The **d6 and d20 are rendered**; the pack also has
+a D4, D8, D10, D10-percentile, D12 and a numbered D6, deferred on size rather than effort —
+all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
 
-The honest caveat: the pip and orientation code assumes an **axis-aligned six-faced solid**.
-`pip_masks()` classifies vertices by which of the six axis directions they face, and
-`rest_quat()` uses a lookup of six axis-aligned rotations. A D8 or D20 needs both replaced
-with something that works off arbitrary face normals — find the face planes, pick the
-one carrying each number, and build the rotation that brings its normal to +Z. The camera,
-material, blur and compositing stages are shape-agnostic and carry over unchanged.
+Adding one is a config entry, its two tables, and a run:
+
+```sh
+python tools/dice-render/pipeline.py d10 --run --install --scene
+```
+
+then add the generated scene to `DiceScenes` on the `GameManager` node in `scenes/game.tscn`.
+Nothing in the game code changes: `Dice.cs` counts a die's faces off its own clips, and the
+palette derives each entry's label and icon from the die itself.
+
+Both `make_scene.py` and the geometry pass in `render.py` are shape-agnostic now: the face
+count comes from the config, faces are found by grouping polygons into planes and taking the
+**N largest by area**, and `rest_quat()` takes the minimal rotation from a face normal to +Z.
+That was verified by rebuilding the d6 with it — same masks vertex for vertex, and a
+pixel-identical resting frame (ROADMAP 8c) — and then by rendering the d20 (ROADMAP 8f).
+
+Two rules that look right and are not: *the planes furthest from the centre* fails, because a
+beveled die's rounded corners sit further out than its faces; and a fixed area threshold finds
+nine planes on a six-sided die. The margin for the top-N rule is 7.8× to 41× across the pack.
+
+An alphanumeric die needs two tables in `dice_config.py`, because neither can be derived:
+
+- `face_values` — which value each face carries. Pip counting only works on a pipped die.
+- `face_twists` — which of the face's three corners points up, so the numeral reads the right
+  way round rather than lying on its side.
+
+Both are read once off `face_sheet.py`:
+
+```sh
+DICE_DIE=d20 blender "<the blend>" --background --python tools/dice-render/face_sheet.py
+python tools/dice-render/face_sheet.py --assemble d20
+```
+
+`face_values` is then machine-checked — opposite faces must sum to `faces + 1` and every value
+must appear once — so a misreading has to be a self-consistent conspiracy to get through.
+
+Two quirks: **the d4 has no up-face** (the value is read at the apex), and the **percentile
+d10 shows 00–90**, which the game code has no concept for yet.
+
+The camera, toon material, motion-blur accumulation and compositing stages are all
+shape-agnostic and carry over unchanged.

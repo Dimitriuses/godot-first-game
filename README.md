@@ -4,8 +4,8 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Drag dice from the right-side palette, sling them across a pixel-art board, and let go —
-they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
+Drag a **d6** or a **d20** from the right-side palette, sling them across a pixel-art board,
+and let go — they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
 2025 while learning the engine's 2D physics: `RigidBody2D`, `PinJoint2D` mouse dragging,
 `Area2D` bounds detection and `AnimatedSprite2D`.
 
@@ -16,7 +16,7 @@ they tumble, land, and report a number. My first project in **Godot 4**, written
 | Input | Action |
 |---|---|
 | **Tab** or **right-edge arrow** | open or close the dice palette |
-| **Drag D6 from the palette** | add another die to the board |
+| **Drag a die from the palette** | add another die to the board |
 | **Left-click and drag the die** | grab it — a pin joint follows the cursor |
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
@@ -46,7 +46,7 @@ dice, watch them tumble, read the numbers. See [ROADMAP.md](ROADMAP.md) items 3 
 
 **The number is no longer a bare random draw**, though it is not physical either. It is
 taken from the frame of the tumble the die was let go on, nudged by a random factor: the idle
-loop covers all six faces across its length, so the moment you release picks a base face and
+loop covers every face across its length, so the moment you release picks a base face and
 the jitter decides how near it you land. The roll animation resumes from that same frame, so
 the spin you were watching carries into the throw. A throw can be influenced but not aimed,
 and the die stays fair.
@@ -139,12 +139,10 @@ Everything here was reproduced by running the project, not inferred from reading
 - ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed: the die now uses an unscaled 32 px-radius
   collider that follows the visible body more closely.
 - ~~**The die artwork is third-party with unknown terms.**~~ Fixed in August 2026: the
-  animation was re-rendered from a CC0 model and is now 3.9 MB instead of 18.6 MB — see
-  [docs/ASSETS.md](docs/ASSETS.md).
+  animation was re-rendered from a CC0 model — see [docs/ASSETS.md](docs/ASSETS.md).
 
 `KNOWNISSUES.md` carries the same list with the measurements; `ROADMAP.md` records where the
-project is heading — chiefly item 8, adding the rest of the dice from the source pack, which
-turns out to be a size problem rather than an art problem.
+project is heading.
 
 ## History
 
@@ -167,10 +165,16 @@ The pre-cleanup state is tagged **`v0.1-original`**.
 August 2026 was the first pass that **did** change behaviour. The die animation was
 re-rendered from a CC0 model, settling the one licensing question and cutting the artwork
 from 18.6 MB to 3.9 MB (ROADMAP 6). The board then grew multiple dice, a drag-out palette
-and a value HUD, which closed ROADMAP 2. Finally `Dice.cs` was rewritten as an explicit
-three-state machine after the drag work left it freezing on a single frame — the cause was
+and a value HUD, which closed ROADMAP 2. `Dice.cs` was rewritten as an explicit three-state
+machine after the drag work left it freezing on a single frame — the cause was
 `AnimatedSprite2D.Stop()` rewinding to frame 0 where `Pause()` was meant, and the workaround
 code built on top of that had been fighting a stall it was itself causing.
+
+Then the die-rendering pipeline was generalised off the d6 it had been written for, and a
+**d20** was added (ROADMAP 8). Nothing in the game knows a face count: `Dice.cs` counts a
+die's faces from its own animation clips, the palette derives each entry's label and icon
+from the die itself, and adding another is an entry in `tools/dice-render/dice_config.py`
+plus a render run.
 
 ## Licence
 

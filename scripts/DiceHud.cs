@@ -12,6 +12,7 @@ public partial class DiceHud : Control
 		public Dice Die;
 		public int Id;
 		public int Value;
+		public int Faces;
 	}
 
 	private readonly Dictionary<Dice, DieEntry> entries = new();
@@ -31,7 +32,10 @@ public partial class DiceHud : Control
 
 	public void AddDie(Dice die, int id, int value)
 	{
-		entries[die] = new DieEntry { Die = die, Id = id, Value = value };
+		entries[die] = new DieEntry
+		{
+			Die = die, Id = id, Value = value, Faces = die.FaceCount
+		};
 		Refresh();
 	}
 
@@ -184,7 +188,9 @@ public partial class DiceHud : Control
 
 		var value = new Label
 		{
-			Text = $"D{entry.Id}    {entry.Value}",
+			// "d6 #3", not "D3": with more than one die type on the board, D<n> reads
+			// as the die's kind and collides with the d6/d20 the label is next to.
+			Text = $"d{entry.Faces} #{entry.Id}    {entry.Value}",
 			SizeFlagsHorizontal = SizeFlags.ExpandFill,
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = MouseFilterEnum.Ignore
@@ -196,7 +202,7 @@ public partial class DiceHud : Control
 			Text = "×",
 			CustomMinimumSize = new Vector2(38, 30),
 			FocusMode = FocusModeEnum.None,
-			TooltipText = $"Remove die D{entry.Id}"
+			TooltipText = $"Remove d{entry.Faces} #{entry.Id}"
 		};
 		remove.Pressed += () => DeleteRequested?.Invoke(entry.Die);
 		row.AddChild(remove);

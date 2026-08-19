@@ -6,7 +6,9 @@ public partial class GameManager : Node2D
 	[Export] public PinJoint2D MousePin;
 	[Export] public StaticBody2D FakeBody;
 	[Export] public Area2D DiceArea;
-	[Export] public PackedScene DiceScene;
+	/// One entry per die type the palette offers. An array rather than a single scene
+	/// so a d20 is an extra element, not a code change.
+	[Export] public Godot.Collections.Array<PackedScene> DiceScenes = new();
 
 	/// Fastest a dragged die is steered or released at, px/s. Without a bound, a flick
 	/// hands the solver an impulse it has to fight, which is how dice used to come out
@@ -40,7 +42,7 @@ public partial class GameManager : Node2D
 
 		var uiLayer = new CanvasLayer { Name = "GameUiLayer" };
 		AddChild(uiLayer);
-		var palette = new DicePalette { Name = "DicePalette", DiceScene = DiceScene };
+		var palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
 		uiLayer.AddChild(palette);
 		palette.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		palette.SpawnRequested += SpawnDie;
@@ -304,12 +306,12 @@ public partial class GameManager : Node2D
 		ClearDragState();
 	}
 
-	public void SpawnDie(Vector2 screenPosition)
+	public void SpawnDie(PackedScene scene, Vector2 screenPosition)
 	{
-		if (DiceScene == null)
+		if (scene == null)
 			return;
 
-		Dice die = DiceScene.Instantiate<Dice>();
+		Dice die = scene.Instantiate<Dice>();
 		AddChild(die);
 		Vector2 viewportSize = GetViewportRect().Size;
 		die.GlobalPosition = new Vector2(

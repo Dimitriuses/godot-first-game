@@ -11,7 +11,7 @@ using System;
 ///            clip, which is the die sitting still showing that face.
 ///   Held     idle0 / idle1 loop while the player agitates it. These loops play
 ///            *only* while the die is held, so a free die is never left looping.
-///   Rolling  one of the "1".."6" clips. It ends on its own last frame, which is
+///   Rolling  one of the numbered clips. It ends on its own last frame, which is
 ///            the resting pose, and emits <see cref="DiceRolledEventHandler"/>.
 ///
 /// The number is not a bare random draw. It is taken from **where the die was in
@@ -50,6 +50,7 @@ public partial class Dice : RigidBody2D
 	[Export] public float ThrowSpinMax = 9f;
 
 	private int currentResult = 1;
+	private int faceCount;              // 0 until first read; see FaceCount
 	private bool isHeld;
 	private bool isRolling;
 	private int spinLevel;              // 0 resting, 1 idle0, 2 idle1
@@ -60,6 +61,36 @@ public partial class Dice : RigidBody2D
 	public bool IsHeld => isHeld;
 	public bool IsRolling => isRolling;
 	public int GetResult() => currentResult;
+
+	/// <summary>
+	/// How many numbered faces this die has, counted from its own clips rather than
+	/// exported, so a d20 scene needs no extra wiring. Resolved on first use, which
+	/// may be before `_Ready` — the palette reads it off a scene it has only
+	/// instantiated.
+	/// </summary>
+	public int FaceCount => faceCount > 0 ? faceCount : (faceCount = CountFaces());
+
+	private int CountFaces()
+	{
+		SpriteFrames frames = AnimatedSprite?.SpriteFrames;
+		if (frames == null)
+			return 6;
+
+		var numbered = new System.Collections.Generic.HashSet<int>();
+		foreach (StringName name in frames.GetAnimationNames())
+			if (int.TryParse(name.ToString(), out int v))
+				numbered.Add(v);
+
+		// They have to be 1..N with nothing missing, or the mapping from a release
+		// frame onto a face would silently point at a clip that is not there.
+		for (int i = 1; i <= numbered.Count; i++)
+			if (!numbered.Contains(i))
+			{
+				GD.PushWarning($"{Name}: numbered clips are not 1..{numbered.Count}");
+				return 6;
+			}
+		return numbered.Count > 0 ? numbered.Count : 6;
+	}
 
 	/// Radius of the die's collider, and where that collider sits relative to the body
 	/// origin — it is deliberately offset to line up with the drawn die. GameManager
@@ -199,16 +230,16 @@ public partial class Dice : RigidBody2D
 		if (isRolling)
 			return;
 
-		int releaseFrame = CurrentIdleFrame();
-		currentResult = ChooseResult(releaseFrame);
+		float releasePos = CurrentIdlePosition();
+		currentResult = ChooseResult(releasePos);
 		ClearHeld();
 		isRolling = true;
 
 		StringName clip = currentResult.ToString();
 		SpriteFrames frames = AnimatedSprite.SpriteFrames;
 		int start = 0;
-		if (releaseFrame >= 0 && frames != null && frames.HasAnimation(clip))
-			start = Mathf.Min(releaseFrame, frames.GetFrameCount(clip) - 1);
+		if (releasePos >= 0f && frames != null && frames.HasAnimation(clip))
+			start = Mathf.Min((int)releasePos, frames.GetFrameCount(clip) - 1);
 
 		// Play first, then place the frame: Play() only rewinds when it actually
 		// changes clip, so rolling the same number twice would otherwise resume
@@ -218,32 +249,39 @@ public partial class Dice : RigidBody2D
 		AnimatedSprite.Frame = start;       // setting Frame also clears FrameProgress
 	}
 
-	/// The frame of the idle loop currently on screen, or -1 if the die is not
+	/// How far through the idle loop the tumble had got, or -1 if the die is not
 	/// tumbling — a die at rest has no release moment to read.
-	private int CurrentIdleFrame()
+	///
+	/// Continuous, not the bare frame index. With six faces over a thirty-frame loop
+	/// each face owned exactly five frames, so the integer worked out even; twenty
+	/// faces over thirty frames would give some faces two frames and some one, biasing
+	/// the die 2:1. FrameProgress makes the position continuous and the split even for
+	/// any face count.
+	private float CurrentIdlePosition()
 	{
 		StringName animation = AnimatedSprite.Animation;
 		if (animation != Idle0 && animation != Idle1)
-			return -1;
-		return AnimatedSprite.Frame;
+			return -1f;
+		return AnimatedSprite.Frame + AnimatedSprite.FrameProgress;
 	}
 
 	/// <summary>
-	/// Pick the face. The tumble frame the die was let go on chooses a base face —
-	/// the idle loop covers all six across its length — and a random offset decides
-	/// how close to that it actually lands, so the throw can be influenced but not
-	/// aimed. A die that was not tumbling has no frame to read and falls back to a
-	/// plain draw.
+	/// Pick the face. Where the tumble had got to when the die was let go chooses a
+	/// base face — the idle loop covers every face across its length — and a random
+	/// offset decides how close to that it actually lands, so the throw can be
+	/// influenced but not aimed. A die that was not tumbling has no release moment to
+	/// read and falls back to a plain draw.
 	/// </summary>
-	private int ChooseResult(int releaseFrame)
+	private int ChooseResult(float releasePos)
 	{
 		SpriteFrames frames = AnimatedSprite.SpriteFrames;
 		int idleLength = frames != null && frames.HasAnimation(Idle0)
 			? frames.GetFrameCount(Idle0) : 0;
+		int faces = FaceCount;
 
-		int baseFace = releaseFrame >= 0 && idleLength > 0
-			? releaseFrame * 6 / idleLength + 1
-			: Random.Shared.Next(1, 7);
+		int baseFace = releasePos >= 0f && idleLength > 0
+			? Mathf.Clamp((int)(releasePos * faces / idleLength), 0, faces - 1) + 1
+			: Random.Shared.Next(1, faces + 1);
 
 		if (ResultJitter <= 0)
 			return WrapFace(baseFace);
@@ -252,11 +290,15 @@ public partial class Dice : RigidBody2D
 		return WrapFace(baseFace + offset);
 	}
 
-	private static int WrapFace(int face) => ((face - 1) % 6 + 6) % 6 + 1;
+	private int WrapFace(int face)
+	{
+		int n = FaceCount;
+		return ((face - 1) % n + n) % n + 1;
+	}
 
 	private void OnAnimationFinished()
 	{
-		// Only the "1".."6" clips can reach this; idle0/idle1 loop instead.
+		// Only the numbered clips can reach this; idle0/idle1 loop instead.
 		if (isRolling)
 			FinishRoll();
 	}
@@ -294,7 +336,7 @@ public partial class Dice : RigidBody2D
 	/// </summary>
 	public void PlaceOnFace(int face)
 	{
-		if (face is < 1 or > 6)
+		if (face < 1 || face > FaceCount)
 			return;
 
 		currentResult = face;

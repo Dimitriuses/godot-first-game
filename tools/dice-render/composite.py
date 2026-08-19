@@ -6,16 +6,22 @@ the outline and shadow smear with the die instead of being pasted onto an
 already-blurred image. Compositing is done premultiplied throughout; only the
 final save converts back to straight alpha.
 
-    python tools/dice-render/composite.py            # all animations
-    python tools/dice-render/composite.py face1      # just one
+    python tools/dice-render/composite.py                  # every clip of the d6
+    python tools/dice-render/composite.py --die d20        # every clip of the d20
+    python tools/dice-render/composite.py --die d20 face3  # just one
+    python tools/dice-render/composite.py --die d20 --prune
+
+`--prune` deletes each clip's sub-frames once it has been composited. A d20's
+sub-frames are about 2.2 GB if they all have to exist at once; rendering and
+compositing a clip at a time with --prune keeps the peak at roughly a twentieth of
+that, at the cost of not being able to re-composite without re-rendering.
 """
-import json, os, sys
+import json, os, shutil, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-WORK = os.environ.get("DICE_WORK") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "build")
-OUT = os.path.join(WORK, "frames")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dice_config
 
 CELL          = 128
 OUTLINE_RGB   = np.array([0x12, 0x12, 0x12], np.float32) / 255.0
@@ -25,7 +31,10 @@ SHADOW_GAIN   = 1.25
 SHADOW_SQUASH = 0.515    # sin(31 deg): a ground circle seen from the camera
 SHADOW_BLUR   = 7.0
 
-TAGS = ["face%d" % n for n in range(1, 7)] + ["idle0", "idle1"]
+
+def tags(cfg):
+    """Every clip of a die, as the directory names render.py writes."""
+    return (["face%d" % n for n in range(1, cfg["faces"] + 1)] + list(cfg["idles"]))
 
 
 def dilate(alpha, px):
@@ -50,11 +59,11 @@ def over(cf, af, cb, ab):
     return cf + cb * (1.0 - af[..., None]), af + ab * (1.0 - af)
 
 
-def process(tag):
-    src = os.path.join(WORK, "faces", tag) if tag.startswith("face") or tag.startswith("idle") else os.path.join(WORK, tag)
+def process(tag, work, prune=False):
+    src = os.path.join(work, "faces", tag)
     meta = json.load(open(os.path.join(src, "meta.json")))
     res = meta["res"]
-    dst = os.path.join(OUT, tag)
+    dst = os.path.join(work, "frames", tag)
     os.makedirs(dst, exist_ok=True)
 
     for fr in meta["frames"]:
@@ -83,10 +92,23 @@ def process(tag):
         out = np.concatenate([np.clip(rgb, 0, 1), np.clip(al, 0, 1)[..., None]], -1)
         Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGBA").save(
             os.path.join(dst, "f%03d.png" % f))
+    if prune:
+        shutil.rmtree(src)
     return meta["nframes"]
 
 
 if __name__ == "__main__":
-    for tag in (sys.argv[1:] or TAGS):
-        print("%s: %d frames" % (tag, process(tag)))
-    print("-> %s" % OUT)
+    argv = sys.argv[1:]
+    prune = "--prune" in argv
+    argv = [a for a in argv if a != "--prune"]
+    name = "d6"
+    if "--die" in argv:
+        i = argv.index("--die")
+        name = argv[i + 1]
+        del argv[i:i + 2]
+    cfg = dice_config.die(name)
+    work = dice_config.work_dir(name)
+
+    for tag in (argv or tags(cfg)):
+        print("%s %s: %d frames" % (name, tag, process(tag, work, prune)), flush=True)
+    print("-> %s" % os.path.join(work, "frames"))

@@ -1,17 +1,24 @@
-"""Check scenes/dice.tscn against the spritesheets actually on disk.
+"""Check a die's .tscn against the spritesheets actually on disk.
 
 Every atlas region must fit inside its texture and sit at the grid cell its frame
 index implies, each animation must draw from exactly one sheet, and the frame
-counts must match what Dice.cs expects. Exits non-zero on any problem.
+counts must match what dice_config says. Exits non-zero on any problem.
 
-    python tools/dice-render/validate.py
+    python tools/dice-render/validate.py            # the d6
+    python tools/dice-render/validate.py d20
 """
 import re, os, sys
 from PIL import Image
 
-ROOT  = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-SCENE = os.path.join(ROOT, "scenes", "dice.tscn")
-EXPECTED = {"1": 91, "2": 91, "3": 91, "4": 91, "5": 91, "6": 91, "idle0": 30, "idle1": 30}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dice_config
+
+ROOT  = dice_config.ROOT
+DIE   = sys.argv[1] if len(sys.argv) > 1 else "d6"
+CFG   = dice_config.die(DIE)
+SCENE = os.path.join(ROOT, CFG["scene"].replace("/", os.sep))
+EXPECTED = {name: n for name, n, _loop in dice_config.animations(CFG)}
+COLS = CFG["cols"]
 
 s = open(SCENE, encoding="utf-8").read()
 ext = {i: p for p, i in re.findall(
@@ -46,9 +53,9 @@ for body, loop, name, speed in anims:
         if x + w > W or y + h > H:
             print("  !! %s frame %d region (%d,%d,%d,%d) outside %dx%d"
                   % (name, k, x, y, w, h, W, H)); fail += 1
-        if (x // w, y // h) != (k % 10, k // 10):
+        if (x // w, y // h) != (k % COLS, k // COLS):
             print("  !! %s frame %d at grid (%d,%d), expected (%d,%d)"
-                  % (name, k, x // w, y // h, k % 10, k // 10)); fail += 1
+                  % (name, k, x // w, y // h, k % COLS, k // COLS)); fail += 1
     cell = atlas[ids[0]][3]
     print("%-6s %-6d %-6s %-5s %-26s %dpx cells in %dx%d"
           % (name, len(ids), loop, speed, os.path.basename(ext[rid]), cell, W, H))
@@ -63,5 +70,6 @@ if "scale" in node:
           % node.replace("\n", "\n    ")); fail += 1
 
 print("\n%s" % ("FAILED: %d problem(s)" % fail if fail else
-                "OK: dice.tscn is consistent with the sheets on disk"))
+                "OK: %s is consistent with the sheets on disk"
+                % os.path.basename(SCENE)))
 sys.exit(1 if fail else 0)

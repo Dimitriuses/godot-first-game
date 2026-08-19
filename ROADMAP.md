@@ -139,23 +139,27 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — planned, not started
+## 8. Add the rest of the dice from the pack — ✅ done for the d20, August 2026
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
 solids, of which one is done:
 
 | Object | Faces | State |
 |---|---|---|
-| `D6 Dotted` | 6 | **done** — this is the die in the game |
+| `D6 Dotted` | 6 | **done** — the die the project started with |
 | `D4` | 4 | not started |
 | `D6 Numbered` | 6 | not started |
 | `D8` | 8 | not started |
 | `D10` | 10 | not started |
 | `D10 Percentile` | 10 | not started, and needs its own value handling |
 | `D12` | 12 | not started |
-| `D20` | 20 | not started |
+| `D20` | 20 | **done**, August 2026 |
 
 **76 faces in total.** That number is the whole problem, so start there.
+
+The d20 shipped in August 2026 at 11.85 MB, close to 8a's 11.1 MB estimate. The six
+remaining dice are deferred, not dropped: each is an entry in `dice_config.py` and a
+render run.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -170,101 +174,309 @@ gives:
 | 16 idle loops | 480 | 3.4 MB |
 | **total** | **7,396** | **43.8 MB** |
 
-That is **12× the current 3.61 MB**, in PNGs, in git forever. It would also
-mean ~7,400 `AtlasTexture` sub-resources against the 606 in `dice.tscn` today. Render cost is
-*not* the problem — roughly an hour of Blender plus half an hour of compositing, once.
+That is **12× the current 3.61 MB**, in PNGs, in git forever. It would also mean ~7,400
+`AtlasTexture` sub-resources against the 606 in `dice.tscn` today. Render cost is *not* the
+problem — roughly an hour of Blender plus half an hour of compositing, once.
 
-**The obvious saving does not work.** The plausible fix is to share the fast opening frames
-between the faces of one die, since a die blurred beyond recognition should look the same
-whichever face it will land on. Measuring the six committed clips says otherwise: they differ
-*most* at frame 0 (mean abs difference 47) and converge steadily to the end (2.2 at frame 90).
-That is because `FACE` in `render.py` gives every face its own turn count, tumble axis and
-drift, deliberately, so the six throws do not read as the same clip. They are six different
-throws that happen to end differently, not one throw with six endings.
+#### Sharing the opening frames does not work — measured, August 2026
 
-Sharing is therefore still possible but is **not free**: it needs the per-face variation
-removed so that all faces of a die share one tumble and diverge only as the spin decays,
-which means re-rendering the d6 as well and giving up some of the variety. The crossover
-frame would then have to be measured rather than guessed — the same diff, run against the
-re-rendered clips.
+The obvious saving is to share the fast opening frames between the faces of one die, since a
+die blurred beyond recognition ought to look the same whichever face it will land on. This was
+tested properly: the d6 was re-rendered with **one tumble shared by all six faces** — identical
+turn count, axis and drift, differing only in the orientation they come to rest on — then
+composited and diffed frame by frame.
 
-**This decision comes before any rendering.** Options, roughly:
+It does not help, and the reason is structural rather than a tuning problem.
 
-1. **Ship a subset.** A d6 and a d20 is what most people actually want; 26 faces is ~15 MB.
-2. **Share the tumble.** Re-render everything with one throw per die type, per-face only
-   after the spin decays. Perhaps half the size, at the cost of variety.
-3. **Shorten the clips.** The landing carries the weight; the long entry does not.
-4. **Generate on demand.** Do not commit the sheets. Breaks clone-and-run, needs Blender.
-5. **Accept ~44 MB.** Honest, and undoes the 2026 cleanup that took the repo from 2,741 files
-   to 43 and the die art from 18.6 MB to 3.9 MB.
+| frame | six faces, own tumbles (shipped) | six faces, one shared tumble |
+|---|---|---|
+| 0 | 47.00 | 2.06 |
+| 24 | 31.59 | 2.33 |
+| 48 | 18.24 | 2.37 |
+| 72 | 7.92 | 2.23 |
+| 90 | 2.24 | 2.24 |
 
-### 8b. Which numeral is on which face cannot be derived
+The shipped clips converge, because each face is a *different throw*. The shared-tumble clips
+sit flat at ~2.2 from the first frame to the last — and 2.2 is exactly what six dice at rest
+showing six different numbers measure. **The clips are equally distinguishable at every frame**,
+so there is no prefix to share.
 
-The d6 was tractable because its faces carry *pips*: `pip_masks()` counts connected clusters
-of recessed geometry and gets 1–6 for free, with opposite faces summing to 7 as a check.
-Every other die in the pack is alphanumeric. You cannot count a glyph.
+The cause: the animation is built as `pose(f) = tumble(f) ∘ rest(n)`. Sharing the tumble makes
+`tumble(f)` common, but the two poses then differ by the constant rotation
+`rest(n₁)⁻¹ ∘ rest(n₂)` at *every* frame. The die never stops carrying the face it is going to
+land on. Motion blur hides it from a viewer, but nothing is actually shared.
 
-The good news is that the recessed-vertex trick still applies — the numerals are indented
-exactly as the pips are, so the existing `DotMask` approach should colour them without
-change. What is missing is only the mapping from face to value.
+Making frames shareable needs a different animation, not a different parameter: the tumble
+would have to be genuinely face-agnostic up to a handoff frame, with each tail then slewing to
+its own resting orientation. That reorientation has to happen while the die is still spinning
+fast enough to hide it — so the handoff lands around frame 40 and the tails run 50 frames.
 
-Proposed, and cheap: render every face flat-on into one indexed contact sheet, read it once
-by eye, and commit the table beside the pipeline. Eight tables, 76 entries, done once. Watch
-for the **6/9 ambiguity** — dice normally disambiguate with an underline or a full stop, and
-whichever this model uses has to be recorded so the table is not silently wrong by two faces.
+#### What the options actually cost
 
-### 8c. The pipeline assumes a cube
+| | size | note |
+|---|---|---|
+| all 76 faces, as the pipeline stands | 43.8 MB | |
+| all 76, shared prefix + slewing tails | 27.5 MB | 37% saved, needs the animation redesign above |
+| all 76, clips cut from 91 to 61 frames | 30.5 MB | 30% saved, no redesign; loses a third of the tumble |
+| **d6 + d20** | **14.7 MB** | d6 already shipped |
+| d6 + d20 + d4 | 17.2 MB | |
+| d6 + d20 + d4 + d8 | 21.9 MB | |
+| d6 alone, today | 3.61 MB | |
 
-`tools/dice-render/render.py` is written for an axis-aligned six-faced solid:
+The redesign buys 37% for real work and still lands at 27.5 MB — seven times the current
+budget. **Sharing is not the lever.** The only options that keep this repository anywhere near
+its current size are shipping a subset, or accepting that the artwork dominates it.
 
-- `pip_masks()` classifies vertices by which of the six axis directions they face (`AXES`).
-- `rest_quat()` looks up one of six axis-aligned Euler rotations.
+Frames cannot be trimmed from the front, incidentally: `Dice.Roll()` enters the clip at the
+release frame, which is an idle frame 0–29, so those are all live entry points.
 
-Both need replacing with something that works off arbitrary face normals: group the mesh's
-polygons into planes, take each plane's normal, and build `Quaternion(normal, +Z)` to present
-that face to the camera. The camera, toon material, motion-blur accumulation and compositing
-stages are all shape-agnostic and carry over untouched.
+#### Decided, August 2026: **d6 + d20, and a pipeline that is configured per die**
 
-Two quirks to plan for:
+Ship the d20 next and stop there for now, at about **14.7 MB** — four times the current
+artwork budget rather than twelve. It is the one die anyone reaches for besides a d6, it needs
+no animation redesign, and the sharing idea is off the table on the evidence above.
 
-- **The d4 has no up-face.** It rests on a face and the value is read at the apex, so
-  "present value *v* to the camera" is a different construction from the other dice.
-- **The percentile d10 shows 00–90**, not 1–10, so its animation names and its HUD value
-  need a display concept the code does not currently have.
+The rest of the pack is **deferred, not dropped**, so the work below is to be built
+**parameterised from the start**: adding a d10 later should be a table entry and a render run,
+not another pass through `render.py`. Concretely that means
 
-### 8d. Code that hardcodes six
+- one **per-die configuration block** — source object, face count, face-to-value table, resting
+  yaw, throw parameters — rather than the current module-level `SRC_OBJECT` and six hardcoded
+  `FACE` entries;
+- **`build_scene()` and the geometry pass taking that block**, so nothing reads "six" from a
+  constant (8c);
+- **output paths and `SpriteFrames` names derived from the block**, so one die's sheets and
+  scene never collide with another's (8e);
+- `Dice.cs` reading its face count from the scene rather than assuming `% 6` (8d).
 
-Small and mechanical, but it is real work:
+The subset decision is therefore about **what gets rendered**, not about what the tooling can
+do. Nothing here should have to be revisited to add the remaining six dice.
 
-- `Dice.cs` — `WrapFace` is `% 6`, `ChooseResult` maps the release frame onto `* 6 /
-  idleLength`, and `PlaceOnFace` bounds-checks `< 1 or > 6`. All need a face count, either
-  exported or counted from the numeric animations in `SpriteFrames`.
-- `GameManager.DiceScene` is a single `PackedScene`; it needs one per die type.
-- `DicePalette` offers exactly one entry, `AddDieOption(list, "D6", ...)`, and one generated
-  icon. It needs an entry and an icon per type.
-- `DiceHud` labels dice `D{Id}` where `Id` is a sequence number, which collides confusingly
-  with d6/d20 notation the moment there is more than one type. Rename before adding dice, not
-  after. Its **Total** also needs a decision once a percentile d10 is in the mix.
+**This decision comes before any rendering.**
 
-### 8e. `dice.tscn` has to be generated
+### 8b. The d20's face-to-value table — ✅ done, August 2026
 
-The scene holds 606 `AtlasTexture` sub-resources written out one per frame. A d20 alone would
-need about 2,000, and the set about 7,400. Nobody maintains that by hand, and the existing
-`retarget_tscn.py` only rescales what is already there.
+The d6 was tractable because its faces carry *pips*: `pip_counts()` counts connected clusters
+of recessed geometry and gets 1–6 for free. Every other die in the pack is alphanumeric, and
+you cannot count a glyph. So the mapping was read by eye, once, and committed.
 
-A generator that writes a die scene from a directory of sheets is a **prerequisite**, not
-cleanup afterwards. `tools/dice-render/validate.py` already checks a scene's regions against
-the PNGs on disk and generalises to whatever the generator emits.
+`tools/dice-render/face_sheet.py` renders every face flat-on into an indexed contact sheet.
+Two details it needs to be usable, both learned the hard way: the whole die has to be in frame
+rather than zoomed to the face, and **only the target face's glyph may be inked** — mark them
+all and every neighbour shows a readable numeral too, and then it is anyone's guess which one
+the image is of.
 
-### Suggested order
+The result is in `dice_config.py` as `face_values`, and it is **machine-checked, not merely
+read**: `face_masks()` verifies that all ten opposite pairs sum to 21 and that each of 1–20
+appears exactly once. A misread would have to be a self-consistent conspiracy to survive that.
+The 6/9 hazard resolved itself — both carry a disambiguating dot, and a swap would have broken
+the sum check anyway.
 
-1. Decide 8a. Nothing else is worth doing until the size question has an answer.
+#### The twist, which this item did not anticipate
+
+Bringing a face normal to +Z leaves the spin *about* +Z completely free. For pips that does
+not matter. For numerals it decides whether the die reads `13` or something lying on its side,
+and the first sheet had most numerals rotated.
+
+The numerals turn out to be aligned to the triangle's edges, so each face has exactly **three**
+candidate orientations and picking the upright one is a ternary choice. `face_sheet.py` renders
+all three per face; the answers are `face_twists` in the config. The corner directions are
+found by averaging `exp(3i*theta)` over the rim, which picks out a triangle's three-fold
+symmetry however the mesh happens to be ordered.
+
+The correct candidate is **not** a constant across faces, because the in-plane basis rotates
+with the face normal — the d20 uses all three.
+
+Confirmed by rendering the resting pose for all twenty values through the game camera: every
+one shows the right numeral, upright.
+
+#### Two fixes that came out of it
+
+- **`recessed_by_face()` took the first matching face, not the nearest.** On a d20 the faces
+  are only ~41° apart, so a vertex near a shared edge falls inside two bands. Taking the first
+  left stray marks on one face and *bitten-off* two-digit numerals on the other — both visible
+  in the first contact sheet. It now takes the nearest plane, which is well defined because the
+  die is convex and no vertex is ever above a face plane.
+- **The red tint was hardcoded to whichever face carried a 1.** That is a d6 affectation; it
+  put a red numeral on the d20. It is `red_value` in the config now, `1` for the d6 and `None`
+  for the d20, where tinting either the 1 or the 20 would be a defensible choice and neither
+  should be invented.
+
+Both dice re-verified afterwards: the d6's masks are still identical vertex for vertex.
+
+### 8c. The geometry pass works off arbitrary face normals — ✅ done, August 2026
+
+`render.py` no longer assumes a cube. The two functions that did have been replaced:
+
+- `pip_masks()`, which classified vertices by which of six axis directions they faced, is now
+  `face_planes()` + `recessed_by_face()` + `pip_counts()`. Polygons are grouped by normal and
+  distance from the centre, and the **N largest groups by area** are the faces, with N taken
+  from `dice_config.py`.
+- `rest_quat()`, which looked up one of six axis-aligned Euler rotations, now takes the minimal
+  rotation from the face normal to +Z.
+
+`render.py` also reads its die from the config now: `DICE_DIE=d20 blender ... --python
+render.py`, defaulting to `d6`.
+
+**Verified against the code it replaced, on the d6:**
+
+| | |
+|---|---|
+| value → face normal | same for all six |
+| `DotMask` | 2,520 vertices, **0 differ** |
+| `RedPip` | 120 vertices, **0 differ** |
+| resting rotation | identical, worst deviation 1.2e-07 |
+| rendered resting frame | **pixel-identical** to the committed sheets, max channel difference 0 |
+
+Two details that made that possible. The minimal rotation happens to equal the old lookup for
+five of the six faces; only the face pointing straight away from the camera is ambiguous, since
+any in-plane axis will do, so it is pinned to a flip about +X — which is what the old table
+did. And the in-plane radius used to decide which vertices sit "on" a face is measured from the
+face's own geometry rather than hardcoded at 0.40, which is what makes it transfer to a solid
+whose faces are a different size.
+
+**The D20 is read correctly:** 20 face planes, all at offset 0.422–0.423, every one with an
+opposite, every one carrying recessed glyph geometry (222 to 1,092 vertices, varying with the
+numeral), and `rest_quat` brings all 20 to +Z.
+
+Values come from counting pip clusters, which only works on a pipped die; on the D20 the
+check fails loudly with a message naming 8b rather than producing 20 wrong faces silently.
+That was the one remaining blocker at the time, and 8b removed it.
+
+One thing 8c did not catch, because measuring the d6 against itself cannot: **the die is
+scaled to its bounding box, which makes an icosahedron render a third too small.** See 8f.
+
+### 8d. Code that hardcodes six — ✅ done, August 2026
+
+Nothing here needed a face count exported. A die's `SpriteFrames` already carries one clip per
+face, named `1`..`n`, so `Dice.FaceCount` counts the animations whose names parse as integers
+and caches the answer. A d20 scene therefore needs no extra wiring, and a scene with a gap in
+the numbering (`1, 2, 4`) warns rather than quietly rolling a number it cannot animate.
+`FaceCount` resolves on first read rather than in `_Ready`, because `DicePalette` asks a scene
+it has only instantiated.
+
+Around it:
+
+- `WrapFace` and `PlaceOnFace`'s bounds check now run off `FaceCount`.
+- `GameManager.DiceScene` became `DiceScenes`, an exported `Array[PackedScene]`, and
+  `SpawnDie` takes the scene to spawn. A second die type is an extra element in `game.tscn`.
+- `DicePalette` builds one entry per scene, and derives both from the die itself: the label
+  from its face count, the icon from the last frame of its `1` clip. There is no per-die
+  artwork to keep in step.
+- `DiceHud` labels dice `d6 #1` — the kind, then the sequence number. The old `D{Id}` read as
+  die-kind notation the moment a d20 existed.
+
+**One thing the item did not anticipate: the release-frame mapping was about to become
+unfair.** `ChooseResult` mapped the integer frame index onto a face, and six faces over a
+thirty-frame idle loop divided evenly — five frames each. Twenty faces over thirty frames does
+not: some faces would get two frames and some one, a 2:1 bias built into the die. The release
+position is now continuous (`Frame + FrameProgress`), which splits evenly for any face count.
+A 12,000-roll sweep over a synthetic 20-clip die lands 600 on every face; on the old mapping
+it would have been 1,200 and 600 alternating.
+
+Fourteen headless checks: the d6's frame-to-face mapping unchanged and still fair over 12,000
+jittered rolls; a hand-built 20-clip `SpriteFrames` reporting `FaceCount == 20`, staying in
+range, distributing evenly, and wrapping jitter rather than running off the end; `PlaceOnFace`
+accepting 20 and refusing 21; `AnimatedSprite` being live on `Instantiate` before the node
+enters the tree, which the palette depends on; `game.tscn` supplying its die through the array
+export; and `SpawnDie(scene, pos)` adding a die.
+
+`docs/screenshot.png` changed, and only where it should: the HUD rows read `d6 #2` instead of
+`D#2`, the palette shows a `D6`. Dice, positions and values are identical, and `docs/roll.gif`
+is byte-identical.
+
+**Still open:** the HUD's **Total** is a plain sum, which is wrong for a percentile d10 (8a).
+That is a decision to make when one exists, not now.
+
+### 8e. `dice.tscn` is generated — ✅ done, August 2026
+
+The scene carries one `AtlasTexture` sub-resource per animation frame: 606 for the d6, about
+2,000 for a d20. It is now written by `tools/dice-render/make_scene.py` from
+`tools/dice-render/dice_config.py` plus whatever sheets are on disk.
+
+`dice_config.py` is the per-die table the rest of item 8 is meant to hang off — source object,
+face count, sheet prefix, scene path and uid, cell size, fps, and the whole `RigidBody2D`
+setup. Adding the d10 later is an entry in `DICE`, not another pass through the tooling. The
+six dice not being rendered yet are listed in `DEFERRED` so their face counts live in one place.
+
+Two things make the generator trustworthy rather than merely plausible:
+
+- **Its first job was to reproduce the scene it replaces.** Running it without `--write`
+  compares what it would emit against the committed scene, field by field — textures,
+  animation names, loop flags, speeds, every frame's atlas region, every sub-resource and
+  every node property. It matched the hand-maintained d6 exactly.
+- **That comparison was itself tested.** Fifteen deliberate mutations of the config — wrong
+  collider radius, wrong bounce, wrong CCD mode, wrong fps, wrong column count, a missing idle
+  — were each detected, two of them by the generator refusing to emit at all because the sheet
+  grid no longer matched the PNG on disk. A checker that only ever says "matches" is worse
+  than none.
+
+The generated scene then replaced the committed one, and **`docs/screenshot.png` and
+`docs/roll.gif` regenerated byte-identical** — Godot loading the new scene, stepping all 606
+frames and producing the same hashes is about as direct as this gets. Twelve in-engine checks
+confirm the body settings, collider, physics material and clip structure all survived.
+
+Sub-resource ids are now deterministic (`AtlasTexture_3_042` rather than
+`AtlasTexture_qxx4u`), so the file diffs sensibly when something really does change.
+`tools/dice-render/validate.py` still checks the result against the PNGs and is unchanged.
+
+**Do not hand-edit `scenes/dice.tscn` any more.** Change `dice_config.py` and regenerate.
+
+### 8f. Rendering the d20 — ✅ done, August 2026
+
+The point of 8a–8e was that this step should be a run, not a project. It nearly was, and the
+one thing that did need fixing is worth recording.
+
+**Dice were being scaled to equal bounding box, which is not equal size.** `normalised_mesh`
+fits every die into a unit cube. A cube fills its bounding box; an icosahedron does not, so
+the d20 came out **42 px across against the d6's 58 px** — a third smaller, sharing a board.
+The fix is not a per-die fudge factor. A convex body's *mean* silhouette over all
+orientations is exactly a quarter of its surface area (Cauchy), and a die is a convex body
+that tumbles through every orientation, so `presentation_scale()` divides by `sqrt(area)`,
+calibrated to leave the d6 at exactly 1.0. The d20 lands at 1.447 and measures **58×62 at
+rest against the d6's 58×62**. `REST_Z` follows from the die's inradius, so a die drawn
+bigger rests higher instead of sinking into the board, and every height in `SEGS` became an
+offset above it.
+
+That also meant the d20 needed **no collider changes at all**: its resting sprite sits within
+a pixel of the d6's, so `collider_radius` and `collider_offset` carried over untouched.
+
+Two other things the run needed:
+
+- **Per-face throw variation is generated now.** Twenty landing clips that read as one clip
+  played twenty times would be worse than none, and twenty hand-tuned sets of numbers are not
+  worth anyone's afternoon. `throw_params()` spreads turn count, tumble axes and drift over
+  the ranges the d6's hand-picked six occupy, using a low-discrepancy sequence rather than
+  random draws, which clump. The d6 pins its own six in `face_throws` because its artwork is
+  already shipped and a re-render has to match.
+- **A red glyph is a setting, not a rule.** Tinting the 1 is a d6 thing; on a d20 either the 1
+  or the 20 would be defensible, so `red_value` is per die and `None` for the d20. `--red 20`
+  renders a variant to look at without editing the table.
+
+The whole pipeline is now driven by `pipeline.py`, one clip at a time — a d20's sub-frames
+are ~2.2 GB if they all exist at once, and clip-by-clip with pruning keeps the peak near a
+twentieth of that while making the run resumable. 21 clips, 48 minutes, 11.85 MB of sheets,
+1,880 atlas regions in `scenes/d20.tscn`.
+
+**The refactor was checked against the shipped artwork, not assumed.** Re-rendering
+`dice_idle0` with the generalised code gives 54 pixels of 491,520 differing by 1/255 — EEVEE's
+sampling noise — and `make_scene.py d6` still reproduces `scenes/dice.tscn` exactly. Nine
+in-engine checks cover the d20 end to end: 20 clips at 91 frames, both idles, every resting
+frame resolving to a real 128 px atlas region, rolling reaching all 20 faces, the palette
+building two entries, and `SpawnDie` putting a d20 on the board.
+
+### What it took, in order
+
+1. Decide 8a. Nothing else was worth doing until the size question had an answer.
 2. Write the scene generator (8e) and point `validate.py` at its output.
-3. Generalise the geometry (8c) and prove it on `D6 Numbered` — six faces, known answers,
-   directly comparable against the die already shipping.
+3. Generalise the geometry (8c) and prove it on the d6 — known answers, directly comparable
+   against the die already shipping.
 4. Build the face-to-value tables (8b).
-5. Generalise the code (8d), with the `DiceHud` rename first.
-6. Render whichever dice 8a settled on.
+5. Generalise the code (8d).
+6. Render the d20 (8f).
+
+Adding the d10 is now steps 4 and 6: read its tables off `face_sheet.py`, then
+`pipeline.py d10 --run --install --scene`.
 
 ## 9. A browser demo, via a hand-written GDScript port — planned, not started
 

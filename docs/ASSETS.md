@@ -42,9 +42,13 @@ If you are the author, please open an issue and it will be credited or removed.
 
 ## `assets/dice/` — CC0 source, rendered for this repository
 
-The eight spritesheets that make up the die (`dice_1_sprites.png` … `dice_6_sprites.png`
-at 1280×1280, `dice_idle0_sprites.png` and `dice_idle1_sprites.png` at 1280×384, 3.9 MB in
-total) were **rendered for this repository in August 2026** from a public-domain 3D model.
+The thirty spritesheets that make up the two dice were **rendered for this repository in
+August 2026** from a public-domain 3D model:
+
+| | sheets | size |
+|---|---|---|
+| d6 | `dice_1_sprites.png` … `dice_6_sprites.png` at 1280×1280, two idle loops at 1280×384 | 3.61 MB |
+| d20 | `d20_1_sprites.png` … `d20_20_sprites.png` at 1280×1280, two idle loops at 1280×384 | 11.85 MB |
 
 The source is **Blend Swap blend #82440, "Dices (D20, D12, D8, D10, D8, D6, D4)"**, released
 under [Creative Commons Zero 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The
@@ -56,9 +60,10 @@ model in `assets/Dice D20 D12 D8 D10 D8 D6 D4/`:
 > requirements: **There are no requirements for this license.**
 
 CC0 imposes no conditions, so no attribution is owed. It is given here anyway, as it is for
-Kenney above. Only the `D6 Dotted` object is used so far; the same pack also holds a D4, D8,
-D10, D10-percentile, D12, D20 and a numbered D6, under the same terms — which is what makes
-the other dice cheap to add later.
+Kenney above. The `D6 Dotted` and `D20` objects are used; the same pack also holds a D4, D8,
+D10, D10-percentile, D12 and a numbered D6, under the same terms — which is what makes the
+remaining dice cheap to add later. What stops them being added today is size, not licence:
+76 faces would come to about 44 MB of PNGs (ROADMAP 8a).
 
 ### How they were rendered
 

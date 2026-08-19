@@ -3,15 +3,16 @@ using Godot;
 public partial class DicePalette : Control
 {
 	[Signal]
-	public delegate void SpawnRequestedEventHandler(Vector2 screenPosition);
+	public delegate void SpawnRequestedEventHandler(PackedScene scene, Vector2 screenPosition);
 
-	public PackedScene DiceScene { get; set; }
+	public Godot.Collections.Array<PackedScene> DiceScenes { get; set; } = new();
 
 	private const float DrawerWidth = 180f;
 	private PanelContainer drawer;
 	private Button toggleButton;
 	private TextureRect dragPreview;
-	private Texture2D dieIcon;
+	private PackedScene draggingScene;
+	private Texture2D draggingIcon;
 	private bool isOpen;
 	private bool isDraggingIcon;
 	private Tween drawerTween;
@@ -47,8 +48,9 @@ public partial class DicePalette : Control
 		dragPreview?.QueueFree();
 		dragPreview = null;
 
-		if (mouse.X < GetViewportRect().Size.X - DrawerWidth)
-			EmitSignal(SignalName.SpawnRequested, mouse);
+		if (mouse.X < GetViewportRect().Size.X - DrawerWidth && draggingScene != null)
+			EmitSignal(SignalName.SpawnRequested, draggingScene, mouse);
+		draggingScene = null;
 		GetViewport().SetInputAsHandled();
 	}
 
@@ -94,8 +96,13 @@ public partial class DicePalette : Control
 		list.AddThemeConstantOverride("separation", 10);
 		scroll.AddChild(list);
 
-		dieIcon = CreateDieIcon();
-		AddDieOption(list, "D6", dieIcon, "Drag onto the board to add a D6");
+		foreach (PackedScene scene in DiceScenes)
+		{
+			if (scene == null)
+				continue;
+			(string label, Texture2D icon) = DescribeDie(scene);
+			AddDieOption(list, label, icon, $"Drag onto the board to add a {label}", scene);
+		}
 
 		var hint = new Label
 		{
@@ -118,7 +125,8 @@ public partial class DicePalette : Control
 		AddChild(toggleButton);
 	}
 
-	private void AddDieOption(Container list, string label, Texture2D icon, string tooltip)
+	private void AddDieOption(Container list, string label, Texture2D icon, string tooltip,
+		PackedScene scene)
 	{
 		var d6Button = new Button
 		{
@@ -130,29 +138,39 @@ public partial class DicePalette : Control
 			FocusMode = FocusModeEnum.None
 		};
 		d6Button.AddThemeConstantOverride("icon_max_width", 92);
-		d6Button.GuiInput += OnDieButtonInput;
+		d6Button.GuiInput += e => OnDieButtonInput(e, scene, icon);
 		list.AddChild(d6Button);
 	}
 
-	private Texture2D CreateDieIcon()
+	/// <summary>
+	/// What to call a die type and what to show for it, both read off the scene rather
+	/// than hardcoded: the number of numbered clips is the number of faces, and the last
+	/// frame of clip "1" is that die sitting at rest.
+	/// </summary>
+	private static (string, Texture2D) DescribeDie(PackedScene scene)
 	{
-		return new AtlasTexture
-		{
-			Atlas = GD.Load<Texture2D>("res://assets/dice/dice_1_sprites.png"),
-			Region = new Rect2(0, 1152, 128, 128)
-		};
+		var probe = scene.Instantiate<Dice>();
+		int faces = probe.FaceCount;
+		Texture2D icon = null;
+		SpriteFrames frames = probe.AnimatedSprite?.SpriteFrames;
+		if (frames != null && frames.HasAnimation("1"))
+			icon = frames.GetFrameTexture("1", frames.GetFrameCount("1") - 1);
+		probe.Free();               // never entered the tree, so Free not QueueFree
+		return ($"D{faces}", icon);
 	}
 
-	private void OnDieButtonInput(InputEvent @event)
+	private void OnDieButtonInput(InputEvent @event, PackedScene scene, Texture2D icon)
 	{
 		if (@event is not InputEventMouseButton mouseButton
 			|| mouseButton.ButtonIndex != MouseButton.Left || !mouseButton.Pressed)
 			return;
 
 		isDraggingIcon = true;
+		draggingScene = scene;
+		draggingIcon = icon;
 		dragPreview = new TextureRect
 		{
-			Texture = dieIcon,
+			Texture = draggingIcon,
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			Size = new Vector2(96, 96),

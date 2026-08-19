@@ -26,14 +26,15 @@ public partial class Capture : Node
 	private const int Height = 648;
 	private const string RollAnimation = "3";
 
-	// Board layout: position -> the face that die should show. Literal, so the
-	// same picture comes out every time.
-	private static readonly (Vector2 Pos, int Face)[] Board =
+	// Board layout: position -> the face that die should show, and which entry of
+	// GameManager.DiceScenes it is. Literal, so the same picture comes out every time.
+	// Entry 0 is the die game.tscn already contains, so its Scene must stay 0.
+	private static readonly (Vector2 Pos, int Face, int Scene)[] Board =
 	{
-		(new Vector2(400, 272), 5),
-		(new Vector2(702, 258), 2),
-		(new Vector2(842, 402), 6),
-		(new Vector2(468, 474), 4),
+		(new Vector2(400, 272), 5, 0),
+		(new Vector2(702, 258), 2, 0),
+		(new Vector2(842, 402), 17, 1),
+		(new Vector2(468, 474), 20, 1),
 	};
 	// Clear of the orange floor decoration and of the die-list panel.
 	private static readonly Vector2 RollingDiePosition = new(599, 250);
@@ -69,7 +70,14 @@ public partial class Capture : Node
 		// One die already sits in game.tscn; add the rest through the same path the
 		// palette uses, so each one is registered with the HUD.
 		for (int i = 1; i < Board.Length; i++)
-			game.SpawnDie(Board[i].Pos);
+		{
+			int k = Board[i].Scene;
+			if (k >= game.DiceScenes.Count)
+				GD.PushWarning($"Board entry {i} wants die scene {k}; only "
+					+ $"{game.DiceScenes.Count} are configured");
+			game.SpawnDie(game.DiceScenes[Mathf.Min(k, game.DiceScenes.Count - 1)],
+				Board[i].Pos);
+		}
 		await Frames(4);
 
 		var dice = new Godot.Collections.Array<Dice>();
