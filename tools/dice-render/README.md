@@ -179,8 +179,8 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 
 ## Adding the other dice (ROADMAP 8)
 
-`dice_config.py` holds the per-die table. **Four are rendered** — a pipped d6, a d20, a d4 and
-a numbered d6, 21.62 MB in total. The pack also has a D8, a D10, a percentile D10 and a D12,
+`dice_config.py` holds the per-die table. **Five are rendered** — a pipped d6, a d20, a d4, a
+numbered d6 and a d8, 26.35 MB in total. The pack also has a D10, a percentile D10 and a D12,
 deferred on size rather than effort: all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
 
 Adding one is a config entry, its two tables, and a run:
@@ -227,6 +227,21 @@ python tools/dice-render/face_sheet.py --assemble-rest d20
 
 The flat-on sheet **cannot** tell you the twists: it presents every face the same way up by
 construction, so every numeral looks upright on it whatever the die will actually do.
+
+**Read the twist sheet carefully — it is the one step with no machine check behind it.** The
+face carrying the value is foreshortened by the camera, on an octahedron to about half its
+height, and a numeral rotated by a third of a turn can pass for an upright one at a glance.
+That is why `--assemble-twists` crops to that face and enlarges it rather than tiling whole
+dice; read at thumbnail size, four of the d8's eight entries came out wrong. Always finish with
+`--rest` and look at every value.
+
+If one looks wrong there, check the table is being *applied* correctly before assuming you
+misread it. Each resting render is produced by one of the twist renders, so it should be
+pixel-identical to exactly one of them:
+
+```python
+# rest_04.png must equal v04_t<face_twists[face of value 4]>.png, to the byte
+```
 
 `face_values` is then machine-checked — opposite faces must sum to `faces + 1` and every value
 must appear once — so a misreading has to be a self-consistent conspiracy to get through.

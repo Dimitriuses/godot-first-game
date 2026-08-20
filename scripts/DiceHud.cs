@@ -19,6 +19,12 @@ public partial class DiceHud : Control
 	/// is not standing on the number it is there to show.
 	private static readonly Vector2 TagOffset = new(18, 18);
 
+	/// Drawer geometry, as offsets from the bottom-left corner. The height is sized so
+	/// one row per die type fits without scrolling — the list scrolls perfectly well,
+	/// but a board holding one of each die should not open onto a half-cut row.
+	private const float DrawerTop = -368f;
+	private const float DrawerBottom = -64f;
+
 	private readonly Dictionary<Dice, DieEntry> entries = new();
 	private VBoxContainer rows;
 	private PanelContainer drawer;
@@ -130,9 +136,9 @@ public partial class DiceHud : Control
 		drawer = new PanelContainer { MouseFilter = MouseFilterEnum.Stop };
 		drawer.SetAnchorsPreset(LayoutPreset.BottomLeft);
 		drawer.OffsetLeft = 16;
-		drawer.OffsetTop = -330;
+		drawer.OffsetTop = DrawerTop;
 		drawer.OffsetRight = 306;
-		drawer.OffsetBottom = -64;
+		drawer.OffsetBottom = DrawerBottom;
 		AddChild(drawer);
 
 		var panelStyle = new StyleBoxFlat
@@ -253,8 +259,8 @@ public partial class DiceHud : Control
 	public void SetOpen(bool open, bool animate)
 	{
 		isOpen = open;
-		float top = open ? -330f : 0f;
-		float bottom = open ? -64f : 266f;
+		float top = open ? DrawerTop : 0f;
+		float bottom = open ? DrawerBottom : DrawerTop - DrawerBottom;
 
 		drawerTween?.Kill();
 		if (animate)

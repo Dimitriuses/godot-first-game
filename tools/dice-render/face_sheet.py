@@ -188,23 +188,30 @@ def assemble_twists(die_name):
     files = sorted(os.listdir(src))
     twists = sorted({int(f[f.index("_t") + 2]) for f in files if f.startswith("v")})
     pad, label, bg, ink = 6, 22, (246, 244, 240), (20, 20, 20)
-    cell = CELL // 2
-    sheet = Image.new("RGB", (len(twists) * (cell + pad) + pad + 40,
-                              cfg["faces"] * (cell + pad) + pad + label), bg)
+
+    # Crop to the face the value is read off and enlarge it, rather than tiling whole
+    # dice. A whole die at thumbnail size is not enough to tell a numeral rotated by a
+    # third of a turn from an upright one -- read that way, four of the d8's eight
+    # entries came out wrong, and the mistake only surfaced when the finished die was
+    # looked at. The face sits in the upper middle of the frame for every solid here.
+    crop = (int(CELL * 0.23), int(CELL * 0.12), int(CELL * 0.77), int(CELL * 0.49))
+    cw, ch = (crop[2] - crop[0]) * 3, (crop[3] - crop[1]) * 3
+    sheet = Image.new("RGB", (len(twists) * (cw + pad) + pad + 40,
+                              cfg["faces"] * (ch + pad) + pad + label), bg)
     draw = ImageDraw.Draw(sheet)
     for t in twists:
-        draw.text((44 + t * (cell + pad), 6), "twist %d" % t, fill=ink)
+        draw.text((44 + t * (cw + pad), 6), "twist %d" % t, fill=ink)
     for v in range(1, cfg["faces"] + 1):
-        y = label + pad + (v - 1) * (cell + pad)
-        draw.text((8, y + cell // 2), "%d" % v, fill=ink)
+        y = label + pad + (v - 1) * (ch + pad)
+        draw.text((8, y + ch // 2), "%d" % v, fill=ink)
         for t in twists:
             f = os.path.join(src, "v%02d_t%d.png" % (v, t))
             if not os.path.exists(f):
                 continue
             tile = Image.new("RGBA", (CELL, CELL), bg + (255,))
             tile.alpha_composite(Image.open(f).convert("RGBA"))
-            sheet.paste(tile.convert("RGB").resize((cell, cell), Image.LANCZOS),
-                        (40 + t * (cell + pad), y))
+            sheet.paste(tile.convert("RGB").crop(crop).resize((cw, ch), Image.LANCZOS),
+                        (40 + t * (cw + pad), y))
     dest = os.path.join(src, "%s_twists.png" % die_name)
     sheet.save(dest)
     print("%s -> %s  (%dx%d)" % (die_name, dest, sheet.size[0], sheet.size[1]))

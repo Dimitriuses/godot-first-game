@@ -146,7 +146,7 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — in progress, four of eight done
+## 8. Add the rest of the dice from the pack — in progress, five of eight done
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
 solids, of which one is done:
@@ -156,7 +156,7 @@ solids, of which one is done:
 | `D6 Dotted` | 6 | **done** — the die the project started with |
 | `D4` | 4 | **done**, August 2026 |
 | `D6 Numbered` | 6 | **done**, August 2026 |
-| `D8` | 8 | not started |
+| `D8` | 8 | **done**, August 2026 |
 | `D10` | 10 | not started |
 | `D10 Percentile` | 10 | not started, and needs its own value handling |
 | `D12` | 12 | not started |
@@ -164,10 +164,10 @@ solids, of which one is done:
 
 **76 faces in total.** That number is the whole problem, so start there.
 
-Four have shipped, at **21.62 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06)
-and the numbered d6 (3.10). The estimates in 8a held — the d20 was predicted at 11.1 MB.
-The four still missing are deferred, not dropped: each is an entry in `dice_config.py`,
-two tables read off a contact sheet, and a render run.
+Five have shipped, at **26.35 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
+the numbered d6 (3.10) and the d8 (4.73). The estimates in 8a held — the d20 was predicted at
+11.1 MB. The three still missing are deferred, not dropped: each is an entry in
+`dice_config.py`, two tables read off a contact sheet, and a render run.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -536,6 +536,35 @@ recovers the size. Only tilting every numeral 45° would, which is worse.
 pack, so matching on average leaves it chunkier at rest. Colliders now follow the drawn die:
 `pipeline.py <die> --collider` measures the resting sprite and reports the circle that fits,
 by a rule that reproduces the d6's and the d20's shipped numbers.
+
+### 8h. The d8 — ✅ done, August 2026
+
+The first die that was genuinely just a run. An octahedron is centrally symmetric, so the
+incentre correction is a no-op; every face has an opposite, so `face_values` is machine-checked
+against pairs summing to 9 and passed on the first reading; the faces are triangles, so three
+twists each. Nine clips, twenty minutes, 4.73 MB, and it rests at 58x60 against the d6's 58x62
+-- close enough to spherical that the silhouette rule needs no argument.
+
+**The tooling did have one real defect, and it was in the reading, not the rendering.** The
+twist sheet tiled whole dice at thumbnail size, and on an octahedron the face carrying the
+value is foreshortened to about half its height by the camera. At that size a numeral rotated
+by a third of a turn is not reliably distinguishable from an upright one: **four of the eight
+entries were read wrong**, and the mistake only surfaced when the finished die was looked at
+and one numeral sat crooked.
+
+Two things came out of it. Before re-reading, the table's *application* was ruled out as the
+cause mechanically rather than by eye: each value's resting render must be pixel-identical to
+one of its three twist renders, and all eight matched at delta 0, which left only the reading.
+And `assemble_twists` now crops to the face the value is read off and enlarges it, instead of
+tiling whole dice -- the corrected table came straight off the new sheet.
+
+That fix matters more than the d8 does. The same misreading was available on every numbered die
+already shipped, and the d20's twenty entries were read off the old sheet.
+
+**The die list grew to fit.** Five die types on the board is five rows, which overflowed the
+drawer and opened onto a half-cut row. The list scrolls and always has, but a board holding one
+of each should not look broken; the drawer is 38px taller. The palette still scrolls at five
+entries and will need smaller ones before all eight fit.
 
 ### What it took, in order
 

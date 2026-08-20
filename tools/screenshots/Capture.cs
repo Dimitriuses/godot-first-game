@@ -34,8 +34,9 @@ public partial class Capture : Node
 	{
 		(new Vector2(400, 272), 5, 1),      // d6
 		(new Vector2(702, 258), 3, 0),      // d4
-		(new Vector2(842, 402), 17, 3),     // d20
+		(new Vector2(842, 402), 17, 4),     // d20
 		(new Vector2(468, 474), 4, 2),      // d6 numbered
+		(new Vector2(250, 232), 8, 3),      // d8
 	};
 	// Clear of the orange floor decoration and of the die-list panel.
 	private static readonly Vector2 RollingDiePosition = new(599, 250);

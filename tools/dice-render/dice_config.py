@@ -149,6 +149,28 @@ DICE = {
         collider_radius=28.0,
         collider_offset=(0, 12),
     ),
+    "d8": dict(
+        label="d8",
+        source_object="D8",
+        faces=8,
+        scene="scenes/d8.tscn",
+        scene_uid="uid://cnitnj3gcgwec",
+        # Read off face_sheet.py. Machine-checked from there: the four opposite pairs
+        # each sum to 9 and every value appears once. The 6 is the face with two glyph
+        # clusters -- underdotted, which is how this model tells a 6 from a 9, and the
+        # only reason to be sure it is not a 9 on a die that has no 9.
+        face_values=[1, 4, 3, 7, 2, 6, 5, 8],
+        # Thirds of a turn, one per face, read off `face_sheet.py --twists`. Indexed by
+        # face, so read alongside face_values above: values 1, 2, 3 and 4 want two
+        # thirds, 5 and 7 one, 6 and 8 none.
+        face_twists=[2, 2, 2, 1, 2, 0, 1, 0],
+
+        # Measured off the finished sheets with `pipeline.py d8 --collider`, which is
+        # a pixel under the shared default: an octahedron is close enough to spherical
+        # that the silhouette rule lands it at 58x60 against the d6's 58x62.
+        collider_radius=31.0,
+        collider_offset=(0, 12),
+    ),
     "d4": dict(
         label="d4",
         source_object="D4",
@@ -190,8 +212,7 @@ DICE = {
 # Dice in the pack that are not being rendered yet (ROADMAP 8a). Recorded so the face
 # counts live in one place and nobody has to reopen the blend to look them up.
 DEFERRED = {
-    "d8": ("D8", 8), "d10": ("D10", 10), "d10p": ("D10 Percentile", 10),
-    "d12": ("D12", 12),
+    "d10": ("D10", 10), "d10p": ("D10 Percentile", 10), "d12": ("D12", 12),
 }
 
 
