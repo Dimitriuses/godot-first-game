@@ -144,7 +144,11 @@ covered. Click and fling by hand once before calling a drag change done. Same fo
 signal is wired — `die.GetSignalConnectionList("mouse_entered").Count == 1`.
 
 Anything positioned from the cursor. `Input.WarpMouse` needs a real window, so the headless
-mouse sits at the origin. To look at one, patch `tools/screenshots/Capture.cs` to warp and
+mouse sits at the origin. Note that Godot's GUI tracks the *operator's* pointer during a
+capture, and `InputPickable` does not cover `Control`s — every button restyles under the
+cursor and the palette raises a name tag, so `Capture.cs` parks the mouse somewhere that
+hovers nothing before it shoots. Without that, `docs/roll.gif` comes out differently
+depending on where the mouse was left. To look at one, patch `tools/screenshots/Capture.cs` to warp and
 hover, run `python tools/screenshots/capture.py`, look at `docs/screenshot.png`, then put
 `Capture.cs` back and re-run it — the images are deterministic, so the originals come back
 byte-identical and there is nothing to clean up by hand.

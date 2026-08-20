@@ -18,6 +18,7 @@ detection and `AnimatedSprite2D`.
 |---|---|
 | **Tab** or **right-edge arrow** | open or close the dice palette |
 | **Drag a die from the palette** | add another die to the board |
+| **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
 | **Left-click and drag the die** | grab it — a pin joint follows the cursor |
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |

@@ -47,6 +47,9 @@ public partial class Capture : Node
 	// Clear of the orange floor decoration and of the die-list panel.
 	private static readonly Vector2 RollingDiePosition = new(599, 250);
 
+	// Below the board, right of the die list, left of the palette: no Control under it.
+	private static readonly Vector2 NeutralMouse = new(576, 610);
+
 	private string outDir = "res://tools/screenshots/build";
 
 	public override async void _Ready()
@@ -59,6 +62,12 @@ public partial class Capture : Node
 		DirAccess.MakeDirRecursiveAbsolute(ProjectSettings.GlobalizePath(outDir + "/roll"));
 
 		DisplayServer.WindowSetSize(new Vector2I(Width, Height));
+
+		// Park the cursor somewhere that hovers nothing. A window opens for real here, so
+		// Godot's GUI tracks wherever the operator's pointer actually is, and every button
+		// and the palette's hover name change appearance under it. Switching InputPickable
+		// off covers the dice but not Controls, which do not use it.
+		Input.WarpMouse(NeutralMouse);
 		await Frames(4);
 
 		var game = GD.Load<PackedScene>("res://scenes/game.tscn").Instantiate<GameManager>();
