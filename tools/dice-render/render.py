@@ -295,6 +295,32 @@ def face_symmetry(nm, face):
                      % ", ".join("m=%d %.2f" % (m, coherence(pts, m)) for m in (3, 4, 5, 6)))
 
 
+def resolved_corner_angle(nm, face, m, resolve):
+    """`corner_angle`, with the m-fold ambiguity resolved when it is not a symmetry.
+
+    An m-fold moment fixes an angle only modulo 360/m, which is exactly right when the
+    face really does have m equivalent ways up. A kite does not: its two-fold moment
+    finds the long axis, but which *end* of that axis is the point is a real difference,
+    and leaving it undecided splits the faces into two groups 180 degrees apart. The
+    one-fold moment does decide it -- the rim's own centre of mass sits toward one end --
+    so the representative nearest that direction is the one to take.
+    """
+    ang = corner_angle(nm, face, m)
+    if not resolve:
+        return ang
+    pts = rim(nm, face, inner=0.5)
+    lead = math.atan2(sum(r * math.sin(t) for r, t in pts),
+                      sum(r * math.cos(t) for r, t in pts))
+    step = 2 * math.pi / m
+    best, best_gap = ang, None
+    for k in range(m):
+        cand = ang + k * step
+        gap = abs(((cand - lead + math.pi) % (2 * math.pi)) - math.pi)
+        if best_gap is None or gap < best_gap:
+            best, best_gap = cand, gap
+    return best
+
+
 def corner_angle(nm, face, m):
     """Where the face's corners point, as an angle in its own plane.
 
@@ -331,17 +357,24 @@ def face_base(normal, face_down):
             else normal.rotation_difference(target))
 
 
-def face_roll(nm, face, candidate, m, face_down):
+def face_roll(nm, face, candidate, m, steps, face_down, resolve=False, offset=0.0):
     """Spin about the view axis that puts the chosen corner at the top of the screen.
 
     Bringing a face normal to the camera axis leaves the spin about that axis free. For
     pips that does not matter; for a numeral it decides whether the die reads "13" or
     something lying on its side, so it has to be pinned.
+
+    `m` is the face's symmetry and fixes the *reference* direction; `steps` is how many
+    twists are offered. They are the same number on a regular face, where the ways up
+    are genuinely equivalent, and they must not be conflated on one that is not: asking
+    `corner_angle` for a twelve-fold moment of a kite returns noise, and every face then
+    gets its own arbitrary zero.
     """
     n = face[0]
     base = face_base(n, face_down)
     u, w = plane_basis(n)
-    ang = corner_angle(nm, face, m) + candidate * (2 * math.pi / m)
+    ang = (resolved_corner_angle(nm, face, m, resolve)
+           + candidate * (2 * math.pi / steps) + offset)
     screen = base @ (u * math.cos(ang) + w * math.sin(ang))
     return math.atan2(screen.x, screen.y)
 
@@ -370,11 +403,17 @@ def face_masks(nm, cfg):
                 "pip counts are not 1..%d but %s -- an alphanumeric die needs a "
                 "face_values table in dice_config.py (ROADMAP 8b)"
                 % (n_faces, sorted(counts)))
+    # Opposite faces sum to a constant on every die that has opposite faces at all, and
+    # that is the only machine check `face_values` gets. A die printed 0..n-1 carries its
+    # top value as a 0, so compare what is printed rather than what is stored.
+    printed = (lambda v: v % n_faces) if cfg["zero_based"] else (lambda v: v)
+    total = n_faces - 1 if cfg["zero_based"] else n_faces + 1
     for k, (n, _d, _r, _v) in enumerate(faces):
         opp = [j for j, (m, _, _, _) in enumerate(faces) if m.dot(n) < -0.995]
-        if opp and counts[k] + counts[opp[0]] != n_faces + 1:
+        if opp and printed(counts[k]) + printed(counts[opp[0]]) != total:
             raise SystemExit("faces %d and %d carry %d and %d; opposites should sum to %d"
-                             % (k, opp[0], counts[k], counts[opp[0]], n_faces + 1))
+                             % (k, opp[0], printed(counts[k]),
+                                printed(counts[opp[0]]), total))
 
     # Which face, if any, gets the red tint. On the d6 that is the lone pip and always
     # has been; on a numbered die it is a design choice, so it comes from the config.
@@ -398,10 +437,14 @@ def face_masks(nm, cfg):
                          % (cfg["name"], len(twists), n_faces))
     down = cfg["rest_face_down"]
     sym = cfg.get("face_symmetry") or face_symmetry(nm, faces[0])
-    if twists is not None and any(not 0 <= t < sym for t in twists):
-        raise SystemExit("face_twists for %s must be 0..%d on a %d-sided face"
-                         % (cfg["name"], sym - 1, sym))
-    rolls = ([face_roll(nm, faces[k], twists[k], sym, down) for k in range(n_faces)]
+    steps = cfg.get("twist_steps") or sym
+    if twists is not None and any(not 0 <= t < steps for t in twists):
+        raise SystemExit("face_twists for %s must be 0..%d"
+                         % (cfg["name"], steps - 1))
+    resolve = cfg["resolve_axis"]
+    offset = math.radians(cfg["twist_offset_deg"])
+    rolls = ([face_roll(nm, faces[k], twists[k], sym, steps, down, resolve, offset)
+              for k in range(n_faces)]
              if twists is not None else [0.0] * n_faces)
 
     return {counts[k]: (faces[k][0], rolls[k]) for k in range(n_faces)}

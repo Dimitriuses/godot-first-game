@@ -163,8 +163,9 @@ def render_twists():
     nm = die.data
     faces = G["face_planes"](nm, cfg["faces"])
     sym = cfg.get("face_symmetry") or G["face_symmetry"](nm, faces[0])
+    steps = cfg.get("twist_steps") or sym
     probe = dict(cfg)
-    for t in range(sym):
+    for t in range(steps):
         probe["face_twists"] = [t] * cfg["faces"]
         values = G["face_masks"](nm, probe)
         for v in range(1, cfg["faces"] + 1):
@@ -174,7 +175,7 @@ def render_twists():
             sc.render.filepath = os.path.join(out, "v%02d_t%d.png" % (v, t))
             bpy.ops.render.render(write_still=True)
     print("TWIST SHEET RENDERED: %d values x %d twists -> %s"
-          % (cfg["faces"], sym, out))
+          % (cfg["faces"], steps, out))
 
 
 def assemble_twists(die_name):

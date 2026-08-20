@@ -146,7 +146,7 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — in progress, five of eight done
+## 8. Add the rest of the dice from the pack — in progress, six of eight done
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
 solids, of which one is done:
@@ -157,17 +157,17 @@ solids, of which one is done:
 | `D4` | 4 | **done**, August 2026 |
 | `D6 Numbered` | 6 | **done**, August 2026 |
 | `D8` | 8 | **done**, August 2026 |
-| `D10` | 10 | not started |
+| `D10` | 10 | **done**, August 2026 |
 | `D10 Percentile` | 10 | not started, and needs its own value handling |
 | `D12` | 12 | not started |
 | `D20` | 20 | **done**, August 2026 |
 
 **76 faces in total.** That number is the whole problem, so start there.
 
-Five have shipped, at **26.35 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
-the numbered d6 (3.10) and the d8 (4.73). The estimates in 8a held — the d20 was predicted at
-11.1 MB. The three still missing are deferred, not dropped: each is an entry in
-`dice_config.py`, two tables read off a contact sheet, and a render run.
+Six have shipped, at **32.81 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
+the numbered d6 (3.10), the d8 (4.73) and the d10 (6.46). The estimates in 8a held — the d20
+was predicted at 11.1 MB. The two still missing are deferred, not dropped: each is an entry in
+`dice_config.py`, its tables, and a render run.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -565,6 +565,47 @@ already shipped, and the d20's twenty entries were read off the old sheet.
 drawer and opened onto a half-cut row. The list scrolls and always has, but a board holding one
 of each should not look broken; the drawer is 38px taller. The palette still scrolls at five
 entries and will need smaller ones before all eight fit.
+
+### 8i. The d10 — ✅ done, August 2026
+
+Three things about this die are unlike every other, and each needed the tooling to grow.
+
+**It is printed 0-9, not 1-10.** The game needs a clip per face and `Dice.cs` names them
+1..n, so the face showing 0 is stored as value 10 -- the ordinary reading of a d10. That broke
+the only machine check `face_values` gets, since opposite faces sum to 9 rather than 11. The
+check now compares what is *printed* rather than what is stored, which keeps it for both kinds
+of die; `zero_based` says which a die is.
+
+**Its faces are kites, which have no rotational symmetry at all.** `face_symmetry` measured
+nothing above 0.5 and refused rather than guessing, which was the right answer. There is no set
+of equivalent ways up here -- the twist is a free angle.
+
+**And two things that had been the same number until now had to come apart.** The first attempt
+set `face_symmetry = 12` to get thirty-degree steps, but `corner_angle` uses that same number
+for its moment, so it was taking a twelve-fold moment of a kite: noise. Every face got its own
+arbitrary zero and the best steps came out scattered -- 5, 3, 8, 10, 10 for the first five
+values. A face's symmetry fixes the *reference direction*; how finely the twist is quantised is
+a separate question, and `twist_steps` is now separate from `face_symmetry`.
+
+With the reference stable the ten faces fell into two clean groups exactly 180 degrees apart:
+the kite's mirror ambiguity, because a two-fold moment finds the long *axis* but not which end
+is the point. The dotted 6 and 9 settled it, being the only two digits whose orientation is
+unmistakable. The one-fold moment resolves the axis into a direction -- the rim's own centre of
+mass sits toward one end -- and with that, **all ten faces want the same rotation**. So the d10
+needs no per-face twist table at all: `resolve_axis`, one `twist_offset_deg` of 135, and every
+value came out upright first try.
+
+That is a better outcome than the d8, where a ten-entry table was read by eye and four were
+wrong. The two flips predictable by eye both matched, and the one value the geometry disagreed
+with was the one already flagged as ambiguous.
+
+`render.py` moved a long way for this, so the d6 was re-rendered afterwards and still matches
+the committed sheets to within sampler noise.
+
+**The screenshot board stopped growing.** Six die types no longer fit the five-row die list, and
+the UI is getting its own pass once the pack is complete, so the board shows five of the six
+rather than opening onto a half-cut row. The numbered d6 is the one left off, being the least
+distinct from the die already there; the palette still offers all six, and scrolls.
 
 ### What it took, in order
 

@@ -28,14 +28,19 @@ public partial class Capture : Node
 
 	// Board layout: position -> the face that die should show, and which entry of
 	// GameManager.DiceScenes it is. Literal, so the same picture comes out every time.
-	// One of each type, in the order the palette lists them. Entry 0 is the die
-	// game.tscn already contains, which is the d6, so its Scene must be the d6's index.
+	// Entry 0 is the die game.tscn already contains, which is the d6, so its Scene must
+	// be the d6's index.
+	//
+	// Five dice, not one of every type: the die list holds five rows before it scrolls,
+	// and a shot of it opening onto a half-cut row is a poor advert. The numbered d6 is
+	// the one left off, being the least distinct from the die already there. The palette
+	// beside it still offers all six.
 	private static readonly (Vector2 Pos, int Face, int Scene)[] Board =
 	{
 		(new Vector2(400, 272), 5, 1),      // d6
 		(new Vector2(702, 258), 3, 0),      // d4
-		(new Vector2(842, 402), 17, 4),     // d20
-		(new Vector2(468, 474), 4, 2),      // d6 numbered
+		(new Vector2(842, 402), 17, 5),     // d20
+		(new Vector2(468, 474), 7, 4),      // d10
 		(new Vector2(250, 232), 8, 3),      // d8
 	};
 	// Clear of the orange floor decoration and of the die-list panel.

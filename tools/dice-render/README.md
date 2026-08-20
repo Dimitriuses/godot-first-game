@@ -179,8 +179,8 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 
 ## Adding the other dice (ROADMAP 8)
 
-`dice_config.py` holds the per-die table. **Five are rendered** — a pipped d6, a d20, a d4, a
-numbered d6 and a d8, 26.35 MB in total. The pack also has a D10, a percentile D10 and a D12,
+`dice_config.py` holds the per-die table. **Six are rendered** — a pipped d6, a d20, a d4, a
+numbered d6, a d8 and a d10, 32.81 MB in total. The pack also has a percentile D10 and a D12,
 deferred on size rather than effort: all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
 
 Adding one is a config entry, its two tables, and a run:
@@ -253,8 +253,25 @@ lands on that face, which is true whether the die is read at the apex or along t
 It also has no opposite faces and therefore no machine check on `face_values`; the constraint
 that does hold is that each value appears on exactly three faces.
 
-Still unhandled: the **percentile d10 shows 00–90**, which the game code has no concept for,
-and its faces are kites rather than regular polygons, so `face_symmetry` may not resolve them.
+**The d10 is printed 0–9**, and the face showing 0 is stored as value 10 — `zero_based` says so,
+and the opposite-faces check compares printed digits rather than stored values.
+
+**Its faces are kites, which have no rotational symmetry**, so there is no set of equivalent
+ways up and `face_symmetry` correctly refuses to measure one. Four settings cover that case, and
+they are easy to confuse:
+
+| | |
+|---|---|
+| `face_symmetry` | the order of the moment that fixes the *reference direction* |
+| `twist_steps` | how many twists are offered, when that is not the symmetry |
+| `resolve_axis` | turn a reference axis into a direction, using the one-fold moment |
+| `twist_offset_deg` | where the artwork sits relative to the reference |
+
+Do **not** raise `face_symmetry` to get finer twists: `corner_angle` takes its moment at that
+order, and a twelve-fold moment of a kite is noise — every face then gets its own arbitrary
+zero. With the axis resolved the d10 needs no per-face table at all, just the one offset.
+
+Still unhandled: the **percentile d10 shows 00–90**, which the game code has no concept for.
 
 The camera, toon material, motion-blur accumulation and compositing stages are all
 shape-agnostic and carry over unchanged.

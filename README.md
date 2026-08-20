@@ -4,8 +4,8 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Drag a **d4**, **d6**, **d8** or **d20** from the right-side palette, sling them across a
-pixel-art board, and let go — they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
+Drag a **d4**, **d6**, **d8**, **d10** or **d20** from the right-side palette, sling them
+across a pixel-art board, and let go — they tumble, land, and report a number. My first project in **Godot 4**, written in **C#** in May–June
 2025 while learning the engine's 2D physics: `RigidBody2D`, `PinJoint2D` mouse dragging,
 `Area2D` bounds detection and `AnimatedSprite2D`.
 
@@ -90,8 +90,8 @@ scripts/    GameManager.cs   drag/release, respawn, bounds handling
             DicePalette.cs   right-side drag-to-spawn dice menu
             DiceHud.cs       sorted die values, total and deletion controls
             Player.cs        board-piece stub, unused (board game dropped)
-assets/     dice/d4 d6 d6n d8 d20  die animation frames, one folder each
-                             (see docs/ASSETS.md)
+assets/     dice/            die animation frames, a folder per die:
+                             d4 d6 d6n d8 d10 d20  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
 tools/      dice-render/     offline Blender pipeline that produces assets/dice/
@@ -173,7 +173,7 @@ machine after the drag work left it freezing on a single frame — the cause was
 code built on top of that had been fighting a stall it was itself causing.
 
 Then the die-rendering pipeline was generalised off the d6 it had been written for, and a
-**d20**, a **d4**, a **numbered d6** and a **d8** were added (ROADMAP 8). Nothing in the game
+**d20**, a **d4**, a **numbered d6**, a **d8** and a **d10** were added (ROADMAP 8). Nothing in the game
 knows a face count: `Dice.cs` counts a die's faces from its own animation clips, the palette and the
 die list name each one from the die itself, and adding another is an entry in
 `tools/dice-render/dice_config.py`, two tables read off a contact sheet, and a render run.

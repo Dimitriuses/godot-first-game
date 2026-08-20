@@ -62,8 +62,31 @@ DEFAULTS = dict(
 
     # Corners per face, which is how many distinct `face_twists` a face has. Measured
     # off the rim when None, which is right for every regular solid in the pack; the
-    # override is here for a face whose symmetry is not its corner count.
+    # override is here for a face that has no rotational symmetry to measure, like the
+    # d10's kites.
     face_symmetry=None,
+
+    # Whether the die is printed 0..n-1 rather than 1..n, as a d10 is. Values are still
+    # stored 1..n -- the game needs a clip per face and `Dice.cs` names them 1..n -- so
+    # the top face holds n and is printed as 0, which is the usual reading of a d10.
+    # Only the opposite-faces check cares, and it compares what is printed.
+    zero_based=False,
+
+    # How many twists to offer per face. Defaults to the face's symmetry, which is the
+    # right number when the ways up are equivalent. A face with no symmetry -- the d10's
+    # kites -- has a free angle instead, so it quantises it finely and records a step
+    # per face. `face_symmetry` still fixes the reference the steps are measured from.
+    twist_steps=None,
+
+    # Whether the reference direction needs its m-fold ambiguity resolved. Off for a
+    # face with real rotational symmetry, where the ambiguity is the symmetry and the
+    # twists cover it. On for one without -- see `resolved_corner_angle`.
+    resolve_axis=False,
+
+    # A constant rotation added to every face's reference, in degrees. The reference is
+    # geometry; this is where the artwork sits relative to it, which no amount of
+    # measuring the solid can tell you.
+    twist_offset_deg=0.0,
 )
 
 DICE = {
@@ -171,6 +194,44 @@ DICE = {
         collider_radius=31.0,
         collider_offset=(0, 12),
     ),
+    "d10": dict(
+        label="d10",
+        source_object="D10",
+        faces=10,
+        scene="scenes/d10.tscn",
+        scene_uid="uid://ba1dvbo1x4a82",
+
+        # Printed 0..9, not 1..10. The face showing 0 is stored as value 10 and its clip
+        # is named "10", which is the ordinary reading of a d10 and the only one that
+        # fits a game whose clips run 1..n.
+        zero_based=True,
+
+        # Read off face_sheet.py, and machine-checked: face k is opposite face 9-k, and
+        # all five pairs of printed digits sum to 9.
+        face_values=[9, 5, 1, 3, 7, 2, 6, 8, 4, 10],
+
+        # A kite has no rotational symmetry at all -- only a mirror line -- so there is
+        # no set of equivalent ways up to choose between, and `face_symmetry` measures
+        # nothing above 0.5 and says so rather than guessing. Two is not a symmetry here
+        # but it is the right *reference*: the two-fold moment of the rim picks out the
+        # kite's long axis, which is stable from face to face. The twist itself is a
+        # free angle, quantised to twelve steps of 30 degrees.
+        face_symmetry=2,
+        resolve_axis=True,
+
+        # One way up, not two: with the axis resolved into a direction every face wants
+        # the same rotation, so there is nothing to choose per face and nothing to
+        # misread. The angle itself is where this die's numerals sit relative to their
+        # kite, measured once off the twist sweep.
+        twist_steps=1,
+        twist_offset_deg=135.0,
+        face_twists=[0] * 10,
+
+        # Measured with `pipeline.py d10 --collider`. Wider than it is tall, unlike
+        # every other die here: a trapezohedron at rest is a squat barrel.
+        collider_radius=33.0,
+        collider_offset=(0, 11),
+    ),
     "d4": dict(
         label="d4",
         source_object="D4",
@@ -212,7 +273,7 @@ DICE = {
 # Dice in the pack that are not being rendered yet (ROADMAP 8a). Recorded so the face
 # counts live in one place and nobody has to reopen the blend to look them up.
 DEFERRED = {
-    "d10": ("D10", 10), "d10p": ("D10 Percentile", 10), "d12": ("D12", 12),
+    "d10p": ("D10 Percentile", 10), "d12": ("D12", 12),
 }
 
 

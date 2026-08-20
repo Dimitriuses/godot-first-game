@@ -183,7 +183,8 @@ why. Do not rebuild it without reading that first.
   loaded resumes mid-way. `Dice.Roll()` therefore plays first and sets `Frame = 0` after.
 - **Setting `Frame` clears `FrameProgress`,** so set them in that order.
 - **Every die scene is generated — do not hand-edit them.** `dice.tscn` (the pipped d6),
-  `d20.tscn`, `d4.tscn`, `d6n.tscn` and `d8.tscn` each hold one `AtlasTexture` per frame:
+  `d20.tscn`, `d4.tscn`, `d6n.tscn`, `d8.tscn` and `d10.tscn` each hold one
+  `AtlasTexture` per frame:
   606 for a d6, 1,880 for the d20. One roll clip of 91 frames per face and two idle loops of
   30, all at 30 fps, played by name from `Dice.cs`. Change
   `tools/dice-render/dice_config.py` and run
@@ -236,7 +237,7 @@ honest.
 ## Regenerating the die artwork
 
 `assets/dice/` is generated, not hand-drawn — a directory per die (`d4/`, `d6/`, `d6n/`,
-`d8/`, `d20/`), each holding one sheet per animation (`1_sprites.png`, `idle0_sprites.png`). The
+`d8/`, `d10/`, `d20/`), each holding one sheet per animation (`1_sprites.png`, `idle0_sprites.png`). The
 Blender pipeline lives in [tools/dice-render/](tools/dice-render/) and has its own README. It
 needs the CC0 source model, which is gitignored — see [docs/ASSETS.md](docs/ASSETS.md).
 
@@ -250,8 +251,8 @@ time** — a d20's sub-frames come to about 2.2 GB if they all exist at once. `-
 up an interrupted run. Budget about a minute per landing clip: 48 for a whole d20.
 `dice_render.ipynb` is the same thing with previews.
 
-Five dice are rendered — a pipped d6, a d20, a d4, a numbered d6 and a d8; the other three in
-the pack are deferred on size (ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two
+Six dice are rendered — a pipped d6, a d20, a d4, a numbered d6, a d8 and a d10; the
+percentile d10 and the d12 are deferred on size (ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two
 tables, a run, and adding the generated scene to `DiceScenes` in `scenes/game.tscn`. **No
 game code changes** — that is what ROADMAP 8d was for.
 
@@ -275,6 +276,13 @@ eight were wrong first time. Read them off the enlarged sheet, then render `--re
 every value before running the die. If a value looks wrong, confirm the table is being
 *applied* correctly before re-reading it: each resting render must be pixel-identical to one of
 that value's twist renders, so diff them and see which one it matches.
+
+**A face with no rotational symmetry does not use this scheme.** The d10's kites have none, so
+there is nothing to choose between: `face_symmetry` fixes the reference direction, `twist_steps`
+quantises the twist, `resolve_axis` turns the reference from an axis into a direction, and one
+`twist_offset_deg` says where the artwork sits. Do not set `face_symmetry` to the number of
+steps you want — `corner_angle` takes its moment at that order, and a twelve-fold moment of a
+kite is noise.
 
 ## Conventions
 
