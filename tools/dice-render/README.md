@@ -179,9 +179,9 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 
 ## Adding the other dice (ROADMAP 8)
 
-`dice_config.py` holds the per-die table. **Six are rendered** — a pipped d6, a d20, a d4, a
-numbered d6, a d8 and a d10, 32.81 MB in total. The pack also has a percentile D10 and a D12,
-deferred on size rather than effort: all 76 faces would be about 44 MB of PNGs (ROADMAP 8a).
+`dice_config.py` holds the per-die table. **Seven are rendered** — everything in the pack but
+the D12, 39.32 MB in total. That last one is deferred on size rather than effort: all 76 faces
+would be about 44 MB of PNGs (ROADMAP 8a).
 
 Adding one is a config entry, its two tables, and a run:
 
@@ -271,7 +271,12 @@ Do **not** raise `face_symmetry` to get finer twists: `corner_angle` takes its m
 order, and a twelve-fold moment of a kite is noise — every face then gets its own arbitrary
 zero. With the axis resolved the d10 needs no per-face table at all, just the one offset.
 
-Still unhandled: the **percentile d10 shows 00–90**, which the game code has no concept for.
+**The percentile d10 shows 00–90**, and `value_step=10` is what turns its stored 1..10 into the
+10..100 the game reports — its "00" face stores 10 and reads as 100. It is *not* `zero_based`
+despite the printed 00: that flag is about how the opposite faces check out, and this die
+satisfies the ordinary sum-to-`faces + 1` rule where the plain d10 needs the modular one. Two
+dice from the same pack, numbered to different conventions; copying the flag across would have
+been caught by the check, which is the point of having it.
 
 The camera, toon material, motion-blur accumulation and compositing stages are all
 shape-agnostic and carry over unchanged.

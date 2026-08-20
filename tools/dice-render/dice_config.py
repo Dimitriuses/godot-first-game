@@ -72,6 +72,11 @@ DEFAULTS = dict(
     # Only the opposite-faces check cares, and it compares what is printed.
     zero_based=False,
 
+    # What one face is worth when reported. 10 on a percentile d10, which is printed in
+    # tens; 1 everywhere else. The stored value stays 1..n either way, because the game
+    # plays a clip per face and names them 1..n.
+    value_step=1,
+
     # How many twists to offer per face. Defaults to the face's symmetry, which is the
     # right number when the ways up are equivalent. A face with no symmetry -- the d10's
     # kites -- has a free angle instead, so it quantises it finely and records a step
@@ -232,6 +237,36 @@ DICE = {
         collider_radius=33.0,
         collider_offset=(0, 11),
     ),
+    "d10p": dict(
+        label="d10 %",
+        source_object="D10 Percentile",
+        faces=10,
+        scene="scenes/d10p.tscn",
+        scene_uid="uid://cafekvnoni3m5",
+
+        # Shown as 00, 10, 20 ... 90, and stored as 1..10 with the 00 face holding 10 --
+        # the same reading that makes a plain d10's 0 a ten. `value_step` is what turns
+        # the stored number into the one the game reports.
+        #
+        # Not `zero_based`, despite the printed 00: that flag is about how the opposite
+        # faces check out, and this die's arrangement satisfies the ordinary rule. Its
+        # pairs of printed values all sum to 110 counting 00 as 100, which is 11 in the
+        # stored numbering. The plain d10 is the one arranged the other way.
+        value_step=10,
+        face_values=[10, 6, 2, 4, 8, 3, 7, 9, 5, 1],
+
+        # A kite, like the plain d10, and lettered the same way -- so the same reference
+        # and the same offset. Confirmed on the rest sheet rather than assumed.
+        face_symmetry=2,
+        resolve_axis=True,
+        twist_steps=1,
+        twist_offset_deg=135.0,
+        face_twists=[0] * 10,
+
+        # The same solid as the plain d10, and it measures the same.
+        collider_radius=33.0,
+        collider_offset=(0, 11),
+    ),
     "d4": dict(
         label="d4",
         source_object="D4",
@@ -273,7 +308,7 @@ DICE = {
 # Dice in the pack that are not being rendered yet (ROADMAP 8a). Recorded so the face
 # counts live in one place and nobody has to reopen the blend to look them up.
 DEFERRED = {
-    "d10p": ("D10 Percentile", 10), "d12": ("D12", 12),
+    "d12": ("D12", 12),
 }
 
 

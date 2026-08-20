@@ -183,7 +183,7 @@ why. Do not rebuild it without reading that first.
   loaded resumes mid-way. `Dice.Roll()` therefore plays first and sets `Frame = 0` after.
 - **Setting `Frame` clears `FrameProgress`,** so set them in that order.
 - **Every die scene is generated — do not hand-edit them.** `dice.tscn` (the pipped d6),
-  `d20.tscn`, `d4.tscn`, `d6n.tscn`, `d8.tscn` and `d10.tscn` each hold one
+  `d20.tscn`, `d4.tscn`, `d6n.tscn`, `d8.tscn`, `d10.tscn` and `d10p.tscn` each hold one
   `AtlasTexture` per frame:
   606 for a d6, 1,880 for the d20. One roll clip of 91 frames per face and two idle loops of
   30, all at 30 fps, played by name from `Dice.cs`. Change
@@ -237,7 +237,7 @@ honest.
 ## Regenerating the die artwork
 
 `assets/dice/` is generated, not hand-drawn — a directory per die (`d4/`, `d6/`, `d6n/`,
-`d8/`, `d10/`, `d20/`), each holding one sheet per animation (`1_sprites.png`, `idle0_sprites.png`). The
+`d8/`, `d10/`, `d10p/`, `d20/`), each holding one sheet per animation (`1_sprites.png`, `idle0_sprites.png`). The
 Blender pipeline lives in [tools/dice-render/](tools/dice-render/) and has its own README. It
 needs the CC0 source model, which is gitignored — see [docs/ASSETS.md](docs/ASSETS.md).
 
@@ -251,8 +251,8 @@ time** — a d20's sub-frames come to about 2.2 GB if they all exist at once. `-
 up an interrupted run. Budget about a minute per landing clip: 48 for a whole d20.
 `dice_render.ipynb` is the same thing with previews.
 
-Six dice are rendered — a pipped d6, a d20, a d4, a numbered d6, a d8 and a d10; the
-percentile d10 and the d12 are deferred on size (ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two
+Seven dice are rendered — everything in the pack but the d12, which is deferred on size
+(ROADMAP 8a). Adding one is an entry in `dice_config.py`, its two
 tables, a run, and adding the generated scene to `DiceScenes` in `scenes/game.tscn`. **No
 game code changes** — that is what ROADMAP 8d was for.
 
@@ -283,6 +283,12 @@ quantises the twist, `resolve_axis` turns the reference from an axis into a dire
 `twist_offset_deg` says where the artwork sits. Do not set `face_symmetry` to the number of
 steps you want — `corner_angle` takes its moment at that order, and a twelve-fold moment of a
 kite is noise.
+
+**A face's number and a die's value are not the same thing.** `Dice.ValueStep` scales one into
+the other: the stored result is always 1..`FaceCount`, because that names the clip and is what
+`PlaceOnFace` takes, and `Value` is what a player reads. Only the percentile d10 sets it, to 10,
+so its "00" face stores 10 and reports 100. Feed the HUD `Value`; address a face with
+`GetResult()`.
 
 ## Conventions
 

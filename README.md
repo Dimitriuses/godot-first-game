@@ -91,7 +91,7 @@ scripts/    GameManager.cs   drag/release, respawn, bounds handling
             DiceHud.cs       sorted die values, total and deletion controls
             Player.cs        board-piece stub, unused (board game dropped)
 assets/     dice/            die animation frames, a folder per die:
-                             d4 d6 d6n d8 d10 d20  (see docs/ASSETS.md)
+                             d4 d6 d6n d8 d10 d10p d20  (see docs/ASSETS.md)
             petixel-prototype/  tileset and figures
             kenney-boardgame/   chip and piece sprites (CC0)
 tools/      dice-render/     offline Blender pipeline that produces assets/dice/
@@ -173,7 +173,8 @@ machine after the drag work left it freezing on a single frame — the cause was
 code built on top of that had been fighting a stall it was itself causing.
 
 Then the die-rendering pipeline was generalised off the d6 it had been written for, and a
-**d20**, a **d4**, a **numbered d6**, a **d8** and a **d10** were added (ROADMAP 8). Nothing in the game
+**d20**, a **d4**, a **numbered d6**, a **d8**, a **d10** and a **percentile d10**
+were added (ROADMAP 8). Nothing in the game
 knows a face count: `Dice.cs` counts a die's faces from its own animation clips, the palette and the
 die list name each one from the die itself, and adding another is an entry in
 `tools/dice-render/dice_config.py`, two tables read off a contact sheet, and a render run.

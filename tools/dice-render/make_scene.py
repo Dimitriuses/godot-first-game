@@ -100,7 +100,9 @@ def generate(cfg):
         # adding it changes no scene that did not need it. Two dice of the same face
         # count would otherwise both be offered as "D6".
         + ('\nDieLabel = "%s"' % cfg["label"]
-           if cfg["label"] != "d%d" % cfg["faces"] else ""))
+           if cfg["label"] != "d%d" % cfg["faces"] else "")
+        # Likewise: only the percentile d10 is worth anything but one per face.
+        + ("\nValueStep = %d" % cfg["value_step"] if cfg["value_step"] != 1 else ""))
     body.append('[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]\n'
                 'sprite_frames = SubResource("SpriteFrames_0")\n'
                 'animation = &"1"\n'

@@ -220,7 +220,7 @@ public partial class GameManager : Node2D
 			return;
 
 		dice.Add(die);
-		diceHud.AddDie(die, nextDieId++, die.GetResult());
+		diceHud.AddDie(die, nextDieId++, die.Value);
 		die.InputPickable = true;
 		die.DiceRolled += result => OnDiceRolled(die, result);
 		die.InputEvent += (Node viewport, InputEvent @event, long shapeIdx) =>
@@ -412,7 +412,9 @@ public partial class GameManager : Node2D
 
 	private void OnDiceRolled(Dice die, int result)
 	{
-		diceHud.UpdateValue(die, result);
+		// `result` is the face; what the HUD wants is what that face is worth, which
+		// differs only on the percentile d10.
+		diceHud.UpdateValue(die, die.Value);
 		GD.Print("Rolled: " + result);
 	}
 

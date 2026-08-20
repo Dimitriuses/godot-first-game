@@ -36,6 +36,12 @@ public partial class Dice : RigidBody2D
 	/// frame picked. 0 makes the throw fully aimable; 3 makes the frame irrelevant.
 	[Export] public int ResultJitter = 2;
 
+	/// What one face is worth when the die reports its result. 10 on a percentile d10,
+	/// which is printed in tens and whose "00" face is the tenth; 1 on everything else.
+	/// The stored result stays 1..FaceCount either way, because that is what names the
+	/// animation clips — this only changes the number the HUD is told.
+	[Export] public int ValueStep = 1;
+
 	/// What the palette calls this die. Empty means "work it out from the face count",
 	/// which is right for every die until two of them have the same one -- a pipped and
 	/// a numbered d6 would both come out "D6".
@@ -65,7 +71,12 @@ public partial class Dice : RigidBody2D
 
 	public bool IsHeld => isHeld;
 	public bool IsRolling => isRolling;
+	/// Which face is up: 1..FaceCount, and the name of that face's clip.
 	public int GetResult() => currentResult;
+
+	/// What that face is worth — what a player reads off the die. The same number for
+	/// every die but the percentile d10, which shows 10 through 90 and then 00 for 100.
+	public int Value => currentResult * ValueStep;
 
 	/// <summary>
 	/// How many numbered faces this die has, counted from its own clips rather than

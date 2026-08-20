@@ -146,7 +146,7 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — in progress, six of eight done
+## 8. Add the rest of the dice from the pack — in progress, seven of eight done
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
 solids, of which one is done:
@@ -158,16 +158,15 @@ solids, of which one is done:
 | `D6 Numbered` | 6 | **done**, August 2026 |
 | `D8` | 8 | **done**, August 2026 |
 | `D10` | 10 | **done**, August 2026 |
-| `D10 Percentile` | 10 | not started, and needs its own value handling |
+| `D10 Percentile` | 10 | **done**, August 2026 |
 | `D12` | 12 | not started |
 | `D20` | 20 | **done**, August 2026 |
 
 **76 faces in total.** That number is the whole problem, so start there.
 
-Six have shipped, at **32.81 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
-the numbered d6 (3.10), the d8 (4.73) and the d10 (6.46). The estimates in 8a held — the d20
-was predicted at 11.1 MB. The two still missing are deferred, not dropped: each is an entry in
-`dice_config.py`, its tables, and a render run.
+Seven have shipped, at **39.32 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
+the numbered d6 (3.10), the d8 (4.73), the d10 (6.46) and the percentile d10 (6.50). The
+estimates in 8a held — the d20 was predicted at 11.1 MB. Only the d12 is left.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -606,6 +605,39 @@ the committed sheets to within sampler noise.
 the UI is getting its own pass once the pack is complete, so the board shows five of the six
 rather than opening onto a half-cut row. The numbered d6 is the one left off, being the least
 distinct from the die already there; the palette still offers all six, and scrolls.
+
+### 8j. The percentile d10 — ✅ done, August 2026
+
+The die every earlier note deferred, on the grounds that "it shows 00-90, which the game code
+has no concept for". It does now.
+
+**A die's face and a die's value stopped being the same number.** `Dice.ValueStep` is what one
+face is worth when reported: the stored result stays 1..`FaceCount`, because that is what names
+the animation clips and what `PlaceOnFace` addresses, and `Value` is what a player reads off the
+die. Only this one sets it, to 10. The HUD and the running total use `Value`; everything that
+addresses a face still uses the stored number.
+
+The 00 face reports **100**, the same reading that makes a plain d10's 0 a ten. A percentile die
+alone is more often read as tens giving 0-90, and only becomes 1-100 paired with a d10 — but a
+sandbox that sums dice should not have a face worth nothing, and the two d10s should agree with
+each other. Changing it means treating the tenth face as 0.
+
+**It is not zero-based, despite the printed 00, and that was worth having a check for.** The
+plain d10 was, so the obvious move was to copy the flag across; the reading disproved it. This
+die's printed values pair up to 110 counting 00 as 100, which is the *ordinary* sum-to-eleven
+rule in the stored numbering, where the plain d10's pair up to 9 and need the modular one. Two
+dice from the same pack, numbered to different conventions. Only the machine check would have
+caught that being copied over.
+
+Everything else transferred whole. Same solid as the plain d10, same lettering, so the same
+kite handling — `face_symmetry=2`, `resolve_axis`, one 135-degree offset, no per-face twist
+table — and all ten values came out upright on the first rest sheet. Its collider measures
+identical to the plain d10's, which is the answer you would want from measuring the same shape
+twice.
+
+The board in the screenshot swapped the plain d10 for this one: they are the same solid, so
+nothing is lost visually, and the die list now shows a row reading `d10 % #4  70` against a
+total of 103, which is the new behaviour actually doing something.
 
 ### What it took, in order
 
