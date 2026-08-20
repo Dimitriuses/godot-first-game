@@ -267,6 +267,27 @@ DICE = {
         collider_radius=33.0,
         collider_offset=(0, 11),
     ),
+    "d12": dict(
+        label="d12",
+        source_object="D12",
+        faces=12,
+        scene="scenes/d12.tscn",
+        scene_uid="uid://dmyfqtt7npvad",
+        # Read off face_sheet.py, and it is the identity -- the face order `face_planes`
+        # returns happens to run 1..12 here. Machine-checked all the same: the six
+        # opposite pairs sum to 13 and every value appears once. The five faces with two
+        # glyph clusters are exactly 6 and 9 (underdotted) plus the two-digit 10, 11 and
+        # 12, which corroborates the reading independently.
+        face_values=list(range(1, 13)),
+        # Fifths of a turn, read off `face_sheet.py --twists`. Indexed by face, and the
+        # face order is the identity here, so this is also the per-value list.
+        face_twists=[1, 0, 0, 0, 1, 0, 3, 1, 3, 3, 3, 1],
+
+        # Measured with `pipeline.py d12 --collider`; the radius lands on the shared
+        # default, the offset a pixel above it.
+        collider_radius=32.0,
+        collider_offset=(0, 11),
+    ),
     "d4": dict(
         label="d4",
         source_object="D4",
@@ -305,11 +326,9 @@ DICE = {
     ),
 }
 
-# Dice in the pack that are not being rendered yet (ROADMAP 8a). Recorded so the face
-# counts live in one place and nobody has to reopen the blend to look them up.
-DEFERRED = {
-    "d12": ("D12", 12),
-}
+# Nothing is deferred any more: every solid in the pack is rendered. Kept as the place
+# to record a die that is known about but not built, if the pack ever grows.
+DEFERRED = {}
 
 
 def die(name):

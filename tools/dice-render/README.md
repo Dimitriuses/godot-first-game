@@ -179,9 +179,9 @@ To add a die, add an entry to `DICE` in `dice_config.py`, render its sheets, and
 
 ## Adding the other dice (ROADMAP 8)
 
-`dice_config.py` holds the per-die table. **Seven are rendered** — everything in the pack but
-the D12, 39.32 MB in total. That last one is deferred on size rather than effort: all 76 faces
-would be about 44 MB of PNGs (ROADMAP 8a).
+`dice_config.py` holds the per-die table. **All eight are rendered** — 76 faces, 46.34 MB of
+sheets, 7,396 atlas regions. 8a estimated 43.8 MB before any of it existed and was right to
+within 6%.
 
 Adding one is a config entry, its two tables, and a run:
 
@@ -202,6 +202,12 @@ pixel-identical resting frame (ROADMAP 8c) — and then by rendering the d20 (RO
 Two rules that look right and are not: *the planes furthest from the centre* fails, because a
 beveled die's rounded corners sit further out than its faces; and a fixed area threshold finds
 nine planes on a six-sided die. The margin for the top-N rule is 7.8× to 41× across the pack.
+
+**How tight the rim cut has to be depends on the face.** `face_symmetry` looks only at the
+outermost vertices, and a rounded corner smears the signal further the closer the corners are
+together: 120° apart on a triangle is forgiving, 72° on a pentagon is not — the d12 scores 0.48
+at m=5 past 0.85 of the circumradius and exactly 1.00 past 0.90. So it tightens until it gets a
+decisive answer, and refuses if none does.
 
 An alphanumeric die needs two tables in `dice_config.py`, because neither can be derived:
 

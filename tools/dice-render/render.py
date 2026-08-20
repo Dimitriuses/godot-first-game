@@ -286,11 +286,23 @@ def face_symmetry(nm, face):
     Only the outermost vertices count. A triangle's edge midpoints sit at half its
     circumradius and are three-fold coherent 60 degrees out of phase with its corners,
     which cancels most of the signal -- including them scores a triangle 0.33 at m=3.
+
+    How tight "outermost" has to be depends on the face. Corners are 120 degrees apart
+    on a triangle and only 72 on a pentagon, so the same rounded corner smears a
+    pentagon's signal much further: the d12 scores 0.48 at m=5 taking everything past
+    0.85 of the circumradius, and exactly 1.00 taking only what is past 0.90. So try
+    tightening. Refusing outright is still the right answer for a face with no
+    rotational symmetry at all -- the d10's kites reach 0.50 at best, at any cut -- and
+    a wrong guess there is worse than a stop.
     """
+    for cut in (0.90, 0.85, 0.80):
+        pts = rim(nm, face, inner=cut)
+        if len(pts) < 3:
+            continue
+        for m in (3, 4, 5, 6):
+            if coherence(pts, m) > 0.7:
+                return m
     pts = rim(nm, face, inner=0.85)
-    for m in (3, 4, 5, 6):
-        if coherence(pts, m) > 0.7:
-            return m
     raise SystemExit("cannot tell how many corners this face has: %s"
                      % ", ".join("m=%d %.2f" % (m, coherence(pts, m)) for m in (3, 4, 5, 6)))
 

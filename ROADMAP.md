@@ -146,10 +146,10 @@ The teleport-and-zero-velocity recovery stays, and now never fires. Release velo
 unclamped, which is a question about feel rather than correctness. Full numbers in
 [KNOWNISSUES.md](KNOWNISSUES.md) issue 4.
 
-## 8. Add the rest of the dice from the pack — in progress, seven of eight done
+## 8. Add the rest of the dice from the pack — ✅ done, August 2026
 
 The CC0 source pack (`assets/Dice D20 D12 D8 D10 D8 D6 D4/`, Blend Swap #82440) holds eight
-solids, of which one is done:
+solids. All eight are in the game:
 
 | Object | Faces | State |
 |---|---|---|
@@ -159,14 +159,22 @@ solids, of which one is done:
 | `D8` | 8 | **done**, August 2026 |
 | `D10` | 10 | **done**, August 2026 |
 | `D10 Percentile` | 10 | **done**, August 2026 |
-| `D12` | 12 | not started |
+| `D12` | 12 | **done**, August 2026 |
 | `D20` | 20 | **done**, August 2026 |
 
-**76 faces in total.** That number is the whole problem, so start there.
+**76 faces in total.** That number was the whole problem, and 8a below is where it was faced.
 
-Seven have shipped, at **39.32 MB** of PNGs: the d6 (3.61), the d20 (11.85), the d4 (3.06),
-the numbered d6 (3.10), the d8 (4.73), the d10 (6.46) and the percentile d10 (6.50). The
-estimates in 8a held — the d20 was predicted at 11.1 MB. Only the d12 is left.
+All of them shipped, at **46.34 MB** of PNGs and **7,396 atlas regions** — against 8a's
+estimate of 43.8 MB and 7,396 frames, made before any of it was rendered. The frame count was
+arithmetic and had to be right; the size landing within 6% of a figure extrapolated from a
+single d6 was luckier than it deserved to be. Per die: d6 3.61, d20 11.85, d4 3.06, numbered
+d6 3.10, d8 4.73, d10 6.46, percentile d10 6.50, d12 7.03.
+
+**Nothing in the game knows a face count, a die's name, or what a face is worth.** `Dice.cs`
+counts a die's faces from its own clips, the palette and the die list name each one from the
+die itself, and `ValueStep` scales a face into a value for the one die that needs it. Adding a
+ninth solid, if the pack ever grew, would be an entry in `dice_config.py`, two tables read off
+a contact sheet, a render run, and a line in `game.tscn`.
 
 ### 8a. The blocker: 76 faces will not fit in this repository
 
@@ -639,6 +647,31 @@ The board in the screenshot swapped the plain d10 for this one: they are the sam
 nothing is lost visually, and the die list now shows a row reading `d10 % #4  70` against a
 total of 103, which is the new behaviour actually doing something.
 
+### 8k. The d12 — ✅ done, August 2026
+
+The last solid in the pack, and the one that found the oldest bug in the geometry pass.
+
+**`face_symmetry` could not measure a pentagon.** It took the rim as everything past 0.85 of
+the circumradius, which drags each corner's bevel neighbours in with it. Corners 120 degrees
+apart on a triangle tolerate that; 72 degrees apart on a pentagon do not -- the d12 scored 0.48
+at m=5 where it should score 1.00, below the threshold, so the function refused. Past 0.90 it
+scores exactly 1.00. The cut is adaptive now, tightening until it gets a decisive answer.
+
+That is the setting that decides how every measured die is presented, so all eight were checked
+afterwards: the five that measure their own symmetry are unchanged, the d12 resolves to 5, and
+the d10 and percentile d10 still refuse -- which is the refusal worth protecting, since a guess
+there would silently produce a wrong model.
+
+**The values are the identity**, 1..12 in face order, and did not have to be taken on trust: the
+six opposite pairs sum to 13, and the five faces carrying two glyph clusters are exactly 6 and 9
+(underdotted) plus the two-digit 10, 11 and 12. Two independent corroborations of one reading.
+
+**One twist was misread again, and caught the same way.** Value 10 has an underline beneath the
+numeral, which made the sideways rendering look level in the grid. The pixel-identity check --
+each resting render must be byte-identical to one of that value's twist renders -- came back
+clean on all twelve, which ruled out the plumbing and left only the reading. That check has now
+caught this class of mistake on the d8, the d10 and the d12.
+
 ### What it took, in order
 
 1. Decide 8a. Nothing else was worth doing until the size question had an answer.
@@ -649,8 +682,19 @@ total of 103, which is the new behaviour actually doing something.
 5. Generalise the code (8d).
 6. Render the d20 (8f).
 
-Adding the d10 is now steps 4 and 6: read its tables off `face_sheet.py`, then
-`pipeline.py d10 --run --install --scene`. That is what 8g measured, and it mostly held.
+7. Render the remaining six, one at a time (8g, 8h, 8i, 8j, 8k), fixing the tooling where
+   each one found a hole in it.
+
+**Each die after the first found exactly one real defect**, and none of them was in the part
+that looked hard. The d4 found the die being centred on its bounding box, which is wrong for
+anything not centrally symmetric and had been wrong since the pipeline was written. The d8
+found the twist sheet being unreadable at the size it was drawn. The d10 found a face's
+symmetry and a twist's granularity being the same number when they are not. The percentile d10
+found a die's face and a die's value being the same number when they are not. The d12 found the
+rim cut that decides a face's corner count being too loose for a pentagon.
+
+That is a good argument for having rendered them one at a time rather than in a batch: every
+one of those was caught by looking at a finished die and finding one thing wrong with it.
 
 ## 9. A browser demo, via a hand-written GDScript port — planned, not started
 

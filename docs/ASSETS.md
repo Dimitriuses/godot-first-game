@@ -42,7 +42,7 @@ If you are the author, please open an issue and it will be credited or removed.
 
 ## `assets/dice/` — CC0 source, rendered for this repository
 
-The seventy-eight spritesheets that make up the seven dice were **rendered for this repository in
+The ninety-two spritesheets that make up the eight dice were **rendered for this repository in
 August 2026** from a public-domain 3D model. Each die has a directory of its own holding one
 1280×1280 landing sheet per face — `1_sprites.png` … — and two 1280×384 idle loops:
 
@@ -55,6 +55,7 @@ August 2026** from a public-domain 3D model. Each die has a directory of its own
 | d8 | `assets/dice/d8/` | 4.73 MB |
 | d10 | `assets/dice/d10/` | 6.46 MB |
 | d10, percentile | `assets/dice/d10p/` | 6.50 MB |
+| d12 | `assets/dice/d12/` | 7.03 MB |
 
 The source is **Blend Swap blend #82440, "Dices (D20, D12, D8, D10, D8, D6, D4)"**, released
 under [Creative Commons Zero 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The
@@ -66,8 +67,7 @@ model in `assets/Dice D20 D12 D8 D10 D8 D6 D4/`:
 > requirements: **There are no requirements for this license.**
 
 CC0 imposes no conditions, so no attribution is owed. It is given here anyway, as it is for
-Kenney above. Every object in the pack but the `D12` is used; that one is still there under the
-same terms — which is what makes
+Kenney above. Every one of the pack's eight solids is used, under the same terms — which is what makes
 the remaining dice cheap to add. What stops them being added today is size, not licence: all
 76 faces would come to about 44 MB of PNGs (ROADMAP 8a).
 

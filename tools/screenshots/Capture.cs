@@ -34,13 +34,13 @@ public partial class Capture : Node
 	// Five dice, not one of every type: the die list holds five rows before it scrolls,
 	// and a shot of it opening onto a half-cut row is a poor advert. The two left off are
 	// the ones least distinct from a die that is here — the numbered d6 beside the pipped
-	// one, and the plain d10 beside the percentile, which are the same solid. The palette
-	// beside it still offers all seven.
+	// one, the plain d10 beside the percentile (the same solid), and the d12, which reads
+	// much like the d20 at this size. The palette beside it still offers all eight.
 	private static readonly (Vector2 Pos, int Face, int Scene)[] Board =
 	{
 		(new Vector2(400, 272), 5, 1),      // d6
 		(new Vector2(702, 258), 3, 0),      // d4
-		(new Vector2(842, 402), 17, 6),     // d20
+		(new Vector2(842, 402), 17, 7),     // d20
 		(new Vector2(468, 474), 7, 5),      // d10 percentile, which reports 70 not 7
 		(new Vector2(250, 232), 8, 3),      // d8
 	};
