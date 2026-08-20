@@ -78,6 +78,70 @@ public partial class Dice : RigidBody2D
 	/// every die but the percentile d10, which shows 10 through 90 and then 00 for 100.
 	public int Value => currentResult * ValueStep;
 
+	/// What to call this die anywhere it is named — the palette, the die list, the
+	/// right-click menu. Its face count, unless two dice share one and it carries its
+	/// own label to tell them apart.
+	public string DisplayName =>
+		string.IsNullOrEmpty(DieLabel) ? $"d{FaceCount}" : DieLabel;
+
+	/// <summary>
+	/// The die this one is read together with, or null. A percentile d10 and a plain
+	/// one make a d100: the first is the tens, the second the units, and the pair reads
+	/// 1 to 100 rather than either die's own number.
+	///
+	/// Held here so anything showing a die can see it, but maintained by
+	/// <see cref="GameManager"/> — pairing is a board operation, and both sides have to
+	/// be set and cleared together.
+	/// </summary>
+	public Dice Partner { get; set; }
+
+	/// <summary>
+	/// The die sitting still on a face, as a texture.
+	///
+	/// The *last* frame of that face's clip, which is the resting pose — frame zero is
+	/// the die still high in the air and blurred past recognition, which is what a
+	/// palette icon or a drag ghost must not be.
+	/// </summary>
+	public Texture2D RestingFrame(int face)
+	{
+		SpriteFrames frames = AnimatedSprite?.SpriteFrames;
+		StringName clip = face.ToString();
+		if (frames == null || !frames.HasAnimation(clip))
+			return null;
+		return frames.GetFrameTexture(clip, frames.GetFrameCount(clip) - 1);
+	}
+
+	/// Whether this die supplies the tens of a pair. The percentile d10 is the one whose
+	/// faces are worth ten apiece, which is exactly what `ValueStep` records.
+	public bool IsTensDie => FaceCount == 10 && ValueStep == 10;
+
+	/// Whether two dice can be read as a d100: ten faces each, one counting in tens and
+	/// the other in ones.
+	public static bool CanPair(Dice a, Dice b) =>
+		a != null && b != null && a != b
+		&& a.FaceCount == 10 && b.FaceCount == 10
+		&& a.IsTensDie != b.IsTensDie
+		&& (a.ValueStep == 1 || b.ValueStep == 1);
+
+	/// <summary>
+	/// What a linked pair reads, from 1 to 100.
+	///
+	/// Both dice carry a ten on the face printed as a zero, so each is taken modulo its
+	/// face count first: the percentile's tenth face is 00 and contributes no tens, the
+	/// plain one's is 0 and contributes no units. Two zeroes is the one combination that
+	/// cannot mean nothing, and by long convention it is a hundred.
+	/// </summary>
+	public static int PairPercent(Dice a, Dice b)
+	{
+		if (!CanPair(a, b))
+			return 0;
+		Dice tens = a.IsTensDie ? a : b;
+		Dice units = a.IsTensDie ? b : a;
+		int total = tens.GetResult() % tens.FaceCount * 10
+			+ units.GetResult() % units.FaceCount;
+		return total == 0 ? 100 : total;
+	}
+
 	/// <summary>
 	/// How many numbered faces this die has, counted from its own clips rather than
 	/// exported, so a d20 scene needs no extra wiring. Resolved on first use, which

@@ -24,7 +24,20 @@ public partial class GameManager : Node2D
 	private readonly HashSet<Dice> deletingDice = new();
 	private Dice draggedDie;
 	private Dice activeDie;
+	private Dice hoveredDie;
 	private DiceHud diceHud;
+	private DiceMenu diceMenu;
+	private CanvasLayer uiLayer;
+
+	/// A copy waiting to be put down: the die type taken, the face it was showing, and
+	/// the ghost that follows the cursor until a click places it.
+	private PackedScene pendingCopyScene;
+	private int pendingCopyFace;
+	private TextureRect copyPreview;
+
+	/// The die waiting to be paired, while its possible partners stand highlighted.
+	private Dice pendingLink;
+	private bool swallowNextDieClick;
 	private int nextDieId = 1;
 	private bool isDragging;
 	private bool isGroupDragging;
@@ -40,7 +53,7 @@ public partial class GameManager : Node2D
 		DiceArea.BodyExited += OnBodyExited;
 		boardBounds = ComputeBoardBounds();
 
-		var uiLayer = new CanvasLayer { Name = "GameUiLayer" };
+		uiLayer = new CanvasLayer { Name = "GameUiLayer" };
 		AddChild(uiLayer);
 		var palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
 		uiLayer.AddChild(palette);
@@ -53,6 +66,15 @@ public partial class GameManager : Node2D
 		diceHud.DeleteRequested += DeleteDie;
 		diceHud.DeleteAllRequested += DeleteAllDice;
 
+		diceMenu = new DiceMenu { Name = "DiceMenu" };
+		uiLayer.AddChild(diceMenu);
+		diceMenu.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		diceMenu.RollRequested += die => die?.Roll(restart: true);
+		diceMenu.CopyRequested += BeginCopy;
+		diceMenu.DeleteRequested += DeleteDie;
+		diceMenu.LinkRequested += BeginLink;
+		diceMenu.UnlinkRequested += Unlink;
+
 		foreach (Node child in GetChildren())
 			if (child is Dice die)
 				RegisterDie(die);
@@ -62,6 +84,8 @@ public partial class GameManager : Node2D
 			spawnPosition = dice[0].Position;
 			SelectOnly(dice[0]);
 		}
+
+		SetProcess(false);          // only while a copy is riding the cursor
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -197,21 +221,129 @@ public partial class GameManager : Node2D
 			return;
 		}
 
-		if (@event is InputEventKey key && key.Keycode == Key.Space && key.Pressed && !key.Echo)
+		if (@event is InputEventKey key && key.Pressed && !key.Echo)
 		{
-			CancelDrag();
-			foreach (Dice die in dice)
-				die.Throw();        // scatter them as well as animating
+			if (key.Keycode == Key.Space)
+			{
+				CancelDrag();
+				foreach (Dice die in dice)
+					die.Throw();        // scatter them as well as animating
+				GetViewport().SetInputAsHandled();
+				return;
+			}
+
+			if (key.Keycode == Key.Escape && (pendingCopyScene != null
+				|| pendingLink != null || diceMenu.Target != null))
+			{
+				CancelCopy();
+				CancelLink();
+				diceMenu.Close();
+				GetViewport().SetInputAsHandled();
+				return;
+			}
+
+			// The menu's actions, on whichever die is under the cursor — or on the one
+			// the open menu belongs to, since pointing at an item means not pointing at
+			// the die any more.
+			Dice subject = diceMenu.Target ?? hoveredDie;
+			if (subject != null && IsInstanceValid(subject) && !isDragging)
+			{
+				if (key.Keycode == DiceMenu.RollKey)
+				{
+					subject.Roll(restart: true);
+					diceMenu.Close();
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+				if (key.Keycode == DiceMenu.CopyKey)
+				{
+					BeginCopy(subject);
+					diceMenu.Close();
+					GetViewport().SetInputAsHandled();
+					return;
+				}
+			}
+		}
+
+		if (@event is not InputEventMouseButton mouseButton || !mouseButton.Pressed)
+		{
+			if (isDragging && @event is InputEventMouseButton release
+				&& release.ButtonIndex == MouseButton.Left && !release.Pressed)
+			{
+				ReleaseDraggedDice();
+				GetViewport().SetInputAsHandled();
+			}
+			return;
+		}
+
+		// The event's own position, not the current cursor: they are the same thing in
+		// the game and not in a harness, and the click should mean where it was made.
+		Vector2 point = mouseButton.Position;
+		// Cleared at the top of every press so a flag set for a click the die never
+		// heard about cannot go on to swallow a later one.
+		swallowNextDieClick = false;
+
+		// A press on the menu is the menu's. Closing it here would take the panel away
+		// before the button saw the release, and no item would ever fire.
+		if (diceMenu.Covers(point))
+			return;
+
+		if (mouseButton.ButtonIndex == MouseButton.Right)
+		{
+			CancelCopy();
+			CancelLink();
+			diceMenu.Close();
+			return;
+		}
+
+		if (mouseButton.ButtonIndex != MouseButton.Left)
+			return;
+
+		diceMenu.Close();
+
+		// _Input runs before the GUI gets a look, so a click on the palette or the die
+		// list arrives here too. Acting on either at that point would drop a die behind
+		// the panel that was clicked.
+		if (GetViewport().GuiGetHoveredControl() != null)
+			return;
+
+		// Finishing a pairing has to happen here rather than in the die's own click
+		// handler: this runs first, and whatever it decides is already done by the time
+		// the die hears about the same click.
+		if (pendingLink != null)
+		{
+			Dice source = pendingLink;
+			CancelLink();
+			Dice picked = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
+			if (picked != null && Dice.CanPair(source, picked) && picked.Partner == null)
+				Link(source, picked);
+			// Consumed whether or not it landed on a partner: the click was the choice,
+			// and it should not also grab whatever it happened to be over.
+			swallowNextDieClick = true;
 			GetViewport().SetInputAsHandled();
 			return;
 		}
 
-		if (isDragging && @event is InputEventMouseButton mouseButton
-			&& mouseButton.ButtonIndex == MouseButton.Left && !mouseButton.Pressed)
-		{
-			ReleaseDraggedDice();
+		if (PlaceCopy(point, mouseButton.ShiftPressed))
 			GetViewport().SetInputAsHandled();
-		}
+	}
+
+	/// The die under a point on the board, or null. Asked of the physics world rather
+	/// than waited for from the die itself, because picking reports after `_Input` has
+	/// already run and decided.
+	private Dice DieAt(Vector2 worldPoint)
+	{
+		var query = new PhysicsPointQueryParameters2D
+		{
+			Position = worldPoint,
+			CollideWithBodies = true,
+			CollideWithAreas = false
+		};
+		foreach (Godot.Collections.Dictionary hit in
+			GetWorld2D().DirectSpaceState.IntersectPoint(query, 8))
+			if (hit["collider"].As<GodotObject>() is Dice die)
+				return die;
+		return null;
 	}
 
 	private void RegisterDie(Dice die)
@@ -227,8 +359,13 @@ public partial class GameManager : Node2D
 			OnDiceInput(die, @event);
 		// Hovering a die names the number it is showing. A d20's up-face is small and
 		// steeply foreshortened in this camera, so reading it off the die is a squint.
-		die.MouseEntered += () => diceHud.SetDieHovered(die, true);
-		die.MouseExited += () => diceHud.SetDieHovered(die, false);
+		die.MouseEntered += () => { hoveredDie = die; diceHud.SetDieHovered(die, true); };
+		die.MouseExited += () =>
+		{
+			if (hoveredDie == die)
+				hoveredDie = null;
+			diceHud.SetDieHovered(die, false);
+		};
 		die.TreeExiting += () =>
 		{
 			dice.Remove(die);
@@ -243,8 +380,37 @@ public partial class GameManager : Node2D
 	private void OnDiceInput(Dice clickedDie, InputEvent @event)
 	{
 		if (isDragging || @event is not InputEventMouseButton mouseButton
-			|| mouseButton.ButtonIndex != MouseButton.Left || !mouseButton.Pressed)
+			|| !mouseButton.Pressed)
 			return;
+
+		if (mouseButton.ButtonIndex == MouseButton.Right)
+		{
+			CancelCopy();       // a right-click means "not that", including mid-copy
+			CancelLink();
+			diceMenu.Open(clickedDie, GetViewport().GetMousePosition(),
+				LinkageOf(clickedDie));
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		if (mouseButton.ButtonIndex != MouseButton.Left)
+			return;
+
+		// _Input already dealt with this click as the second half of a pairing.
+		if (swallowNextDieClick)
+		{
+			swallowNextDieClick = false;
+			return;
+		}
+		diceMenu.Close();
+
+		// A copy waiting to be placed wins over grabbing the die that was clicked; the
+		// alternative is a click that looks dead because the copy is still on the cursor.
+		if (PlaceCopy(mouseButton.Position, mouseButton.ShiftPressed))
+		{
+			GetViewport().SetInputAsHandled();
+			return;
+		}
 
 		if (Input.IsKeyPressed(Key.Shift))
 		{
@@ -325,10 +491,19 @@ public partial class GameManager : Node2D
 		SelectOnly(die);
 	}
 
+	/// <summary>
+	/// Select one die — and its partner with it, if it has one.
+	///
+	/// A linked pair reads as a single d100, so it picks up, moves and is thrown as one
+	/// thing. Two dice selected is already the group drag, which steers both to the
+	/// cursor and keeps them apart, so this needs no separate handling downstream.
+	/// </summary>
 	private void SelectOnly(Dice die)
 	{
 		selectedDice.Clear();
 		selectedDice.Add(die);
+		if (die.Partner != null && IsInstanceValid(die.Partner) && dice.Contains(die.Partner))
+			selectedDice.Add(die.Partner);
 		activeDie = die;
 	}
 
@@ -385,6 +560,174 @@ public partial class GameManager : Node2D
 		draggedDie = null;
 	}
 
+	/// What the menu may offer for this die: pair up, come apart, or neither.
+	private DiceMenu.Linkage LinkageOf(Dice die)
+	{
+		if (die.Partner != null && IsInstanceValid(die.Partner))
+			return DiceMenu.Linkage.Linked;
+		foreach (Dice other in dice)
+			if (Dice.CanPair(die, other) && other.Partner == null)
+				return DiceMenu.Linkage.Available;
+		return DiceMenu.Linkage.Impossible;
+	}
+
+	/// <summary>
+	/// Start picking a partner. The dice that could take the other half light up, and
+	/// the next click on one of them makes the pair.
+	/// </summary>
+	private void BeginLink(Dice die)
+	{
+		if (die == null || !IsInstanceValid(die))
+			return;
+
+		CancelLink();
+		pendingLink = die;
+		foreach (Dice other in dice)
+			if (Dice.CanPair(die, other) && other.Partner == null)
+				other.SetHovered(true);
+	}
+
+	private void CancelLink()
+	{
+		if (pendingLink == null)
+			return;
+		foreach (Dice other in dice)
+			if (IsInstanceValid(other))
+				other.SetHovered(false);
+		pendingLink = null;
+	}
+
+	/// Read two dice as one d100. Either may already be in a pair; the old one comes
+	/// apart first, because a die cannot be half of two hundreds at once.
+	private void Link(Dice a, Dice b)
+	{
+		if (!Dice.CanPair(a, b))
+			return;
+		Unlink(a);
+		Unlink(b);
+		a.Partner = b;
+		b.Partner = a;
+		diceHud.UpdateValue(a, a.Value);        // redraw the list as one row
+	}
+
+	private void Unlink(Dice die)
+	{
+		if (die == null || !IsInstanceValid(die))
+			return;
+		Dice partner = die.Partner;
+		die.Partner = null;
+		if (partner != null && IsInstanceValid(partner))
+		{
+			partner.Partner = null;
+			diceHud.UpdateValue(partner, partner.Value);
+		}
+		diceHud.UpdateValue(die, die.Value);
+	}
+
+	/// <summary>
+	/// Take a copy of a die and wait for a click to put it down.
+	///
+	/// Deliberately not the palette's press-drag-release: this starts from a menu the
+	/// pointer has already been pressed and released on, so there is no drag left to
+	/// carry. Click once more to place, Escape or right-click to drop the idea.
+	/// </summary>
+	private void BeginCopy(Dice die)
+	{
+		if (die == null || !IsInstanceValid(die))
+			return;
+
+		PackedScene scene = SceneOf(die);
+		if (scene == null)
+		{
+			GD.PushWarning($"{die.Name}: cannot tell which scene it came from, not copying");
+			return;
+		}
+
+		CancelCopy();
+		pendingCopyScene = scene;
+		pendingCopyFace = die.GetResult();      // a copy shows what it was copied from
+
+		copyPreview = new TextureRect
+		{
+			Name = "CopyPreview",
+			// The face it was copied from, at rest and cropped to the die — the same
+			// picture the palette puts on its buttons, so a copy on the cursor looks
+			// like the thing being copied.
+			Texture = DicePalette.CropToDie(die.RestingFrame(pendingCopyFace)),
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			Size = new Vector2(96, 96),
+			Modulate = new Color(1, 1, 1, 0.65f),
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			ZIndex = 100
+		};
+		uiLayer.AddChild(copyPreview);
+		SetProcess(true);
+	}
+
+	private void CancelCopy()
+	{
+		pendingCopyScene = null;
+		copyPreview?.QueueFree();
+		copyPreview = null;
+		SetProcess(false);
+	}
+
+	/// <summary>
+	/// Put the waiting copy down.
+	///
+	/// <param name="keepGhost">
+	/// Shift was held for this click: leave the copy on the cursor so the next click
+	/// stamps another, rather than going back to the menu for each one. Taken from the
+	/// click itself rather than from the live keyboard, so it is the modifier state of
+	/// the press that decides — and so a harness can drive it.
+	/// </param>
+	/// </summary>
+	private bool PlaceCopy(Vector2 screenPoint, bool keepGhost)
+	{
+		if (pendingCopyScene == null)
+			return false;
+
+		PackedScene scene = pendingCopyScene;
+		int face = pendingCopyFace;
+		if (!keepGhost)
+			CancelCopy();
+
+		SpawnDie(scene, screenPoint);
+		// SpawnDie selects what it made, so this is the copy and not the original.
+		activeDie?.PlaceOnFace(face);
+		return true;
+	}
+
+	/// Which scene a die was made from. Godot records that on the instance root, so it
+	/// holds for the die placed in game.tscn as well as for every one spawned since.
+	private PackedScene SceneOf(Dice die)
+	{
+		if (!string.IsNullOrEmpty(die.SceneFilePath))
+			return GD.Load<PackedScene>(die.SceneFilePath);
+
+		// Built in code rather than instanced: fall back to whichever configured type
+		// carries the same name.
+		foreach (PackedScene candidate in DiceScenes)
+		{
+			if (candidate == null)
+				continue;
+			var probe = candidate.Instantiate<Dice>();
+			bool match = probe.DisplayName == die.DisplayName;
+			probe.Free();
+			if (match)
+				return candidate;
+		}
+		return null;
+	}
+
+	public override void _Process(double delta)
+	{
+		if (copyPreview != null)
+			copyPreview.Position =
+				GetViewport().GetMousePosition() - copyPreview.Size / 2f;
+	}
+
 	private void DeleteDie(Dice die)
 	{
 		if (!IsInstanceValid(die) || deletingDice.Contains(die))
@@ -392,6 +735,10 @@ public partial class GameManager : Node2D
 
 		if (isDragging && (draggedDie == die || selectedDice.Contains(die)))
 			CancelDrag();
+
+		Unlink(die);        // never leave the other half of a pair pointing at a corpse
+		if (pendingLink == die)
+			CancelLink();
 
 		deletingDice.Add(die);
 		dice.Remove(die);

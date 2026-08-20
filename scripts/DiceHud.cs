@@ -83,7 +83,7 @@ public partial class DiceHud : Control
 			return;
 		}
 
-		valueTagLabel.Text = $"{entry.Name} #{entry.Id}   {entry.Value}";
+		valueTagLabel.Text = Describe(entry).Text;
 		valueTag.ResetSize();       // a PanelContainer outside a container keeps its old size
 		valueTag.Visible = true;
 
@@ -104,16 +104,10 @@ public partial class DiceHud : Control
 	{
 		entries[die] = new DieEntry
 		{
-			Die = die, Id = id, Value = value, Name = NameOf(die)
+			Die = die, Id = id, Value = value, Name = die.DisplayName
 		};
 		Refresh();
 	}
-
-	/// What to call a die in the list. The same name the palette offers it under, so a
-	/// row and a drawer entry can be matched up -- and so the pipped and numbered d6,
-	/// which have the same face count, do not both come out "d6".
-	private static string NameOf(Dice die) =>
-		string.IsNullOrEmpty(die.DieLabel) ? $"d{die.FaceCount}" : die.DieLabel;
 
 	public void UpdateValue(Dice die, int value)
 	{
@@ -121,6 +115,35 @@ public partial class DiceHud : Control
 			return;
 		entry.Value = value;
 		Refresh();
+	}
+
+	/// <summary>
+	/// How a die reads in the list: on its own, or as half of a d100.
+	///
+	/// A linked pair is one entry, not two. Showing the same hundred against both dice
+	/// would double it in the total, and showing each die's own number would contradict
+	/// the pair it is part of.
+	/// </summary>
+	private (string Text, int Value) Describe(DieEntry entry)
+	{
+		Dice partner = entry.Die.Partner;
+		if (partner != null && IsInstanceValid(partner)
+			&& entries.TryGetValue(partner, out DieEntry other))
+		{
+			int percent = Dice.PairPercent(entry.Die, partner);
+			int lo = Mathf.Min(entry.Id, other.Id), hi = Mathf.Max(entry.Id, other.Id);
+			return ($"d100 #{lo}+#{hi}    {percent}%", percent);
+		}
+		return ($"{entry.Name} #{entry.Id}    {entry.Value}", entry.Value);
+	}
+
+	/// Which of a linked pair owns the row. The tens die, so the choice does not depend
+	/// on which one happened to be linked first.
+	private bool RendersRow(DieEntry entry)
+	{
+		Dice partner = entry.Die.Partner;
+		return partner == null || !IsInstanceValid(partner)
+			|| !entries.ContainsKey(partner) || entry.Die.IsTensDie;
 	}
 
 	public void RemoveDie(Dice die)
@@ -250,8 +273,11 @@ public partial class DiceHud : Control
 		int total = 0;
 		foreach (DieEntry entry in sorted)
 		{
-			total += entry.Value;
-			AddRow(entry);
+			if (!RendersRow(entry))
+				continue;               // its partner draws the pair's one row
+			(string text, int value) = Describe(entry);
+			total += value;
+			AddRow(entry, text);
 		}
 		totalButton.Text = $"Total: {total}";
 	}
@@ -277,7 +303,7 @@ public partial class DiceHud : Control
 		}
 	}
 
-	private void AddRow(DieEntry entry)
+	private void AddRow(DieEntry entry, string text)
 	{
 		var row = new HBoxContainer
 		{
@@ -293,21 +319,33 @@ public partial class DiceHud : Control
 		{
 			// "d6 #3", not "D3": with more than one die type on the board, D<n> reads
 			// as the die's kind and collides with the d6/d20 the label is next to.
-			Text = $"{entry.Name} #{entry.Id}    {entry.Value}",
+			Text = text,
 			SizeFlagsHorizontal = SizeFlags.ExpandFill,
 			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = MouseFilterEnum.Ignore
 		};
 		row.AddChild(value);
 
+		// One row, one delete: on a pair the row stands for both dice, so the cross has
+		// to take both. Removing half a d100 and leaving the other half behind would be
+		// a stranger thing for it to do.
+		Dice partner = entry.Die.Partner;
+		bool paired = partner != null && IsInstanceValid(partner)
+			&& entries.ContainsKey(partner);
 		var remove = new Button
 		{
 			Text = "×",
 			CustomMinimumSize = new Vector2(38, 30),
 			FocusMode = FocusModeEnum.None,
-			TooltipText = $"Remove {entry.Name} #{entry.Id}"
+			TooltipText = paired ? $"Remove both dice of {text.Split("  ")[0]}"
+				: $"Remove {entry.Name} #{entry.Id}"
 		};
-		remove.Pressed += () => DeleteRequested?.Invoke(entry.Die);
+		remove.Pressed += () =>
+		{
+			if (paired)
+				DeleteRequested?.Invoke(partner);
+			DeleteRequested?.Invoke(entry.Die);
+		};
 		row.AddChild(remove);
 	}
 }

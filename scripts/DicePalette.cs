@@ -120,7 +120,7 @@ public partial class DicePalette : Control
 			if (scene == null)
 				continue;
 			(string label, Texture2D icon) = DescribeDie(scene);
-			AddDieOption(grid, label, icon, scene);
+			AddDieOption(grid, label, CropToDie(icon), scene);
 		}
 
 		var hint = new Label
@@ -180,7 +180,7 @@ public partial class DicePalette : Control
 		// share a shape, which is what the hover name is for.
 		var button = new Button
 		{
-			Icon = CropToDie(icon),
+			Icon = icon,
 			ExpandIcon = true,
 			CustomMinimumSize = new Vector2(ButtonSize, ButtonSize),
 			FocusMode = FocusModeEnum.None
@@ -220,7 +220,7 @@ public partial class DicePalette : Control
 	/// window would leave the small ones swimming. Cropping each to itself makes every
 	/// button equally full.
 	/// </summary>
-	private static Texture2D CropToDie(Texture2D icon)
+	public static Texture2D CropToDie(Texture2D icon)
 	{
 		if (icon is not AtlasTexture cell || cell.Atlas == null)
 			return icon;
@@ -266,14 +266,8 @@ public partial class DicePalette : Control
 	private static (string, Texture2D) DescribeDie(PackedScene scene)
 	{
 		var probe = scene.Instantiate<Dice>();
-		// The face count names the die unless it cannot: a pipped and a numbered d6
-		// both have six, so a die may carry its own label to break the tie.
-		string label = string.IsNullOrEmpty(probe.DieLabel)
-			? $"d{probe.FaceCount}" : probe.DieLabel;
-		Texture2D icon = null;
-		SpriteFrames frames = probe.AnimatedSprite?.SpriteFrames;
-		if (frames != null && frames.HasAnimation("1"))
-			icon = frames.GetFrameTexture("1", frames.GetFrameCount("1") - 1);
+		string label = probe.DisplayName;
+		Texture2D icon = probe.RestingFrame(1);
 		probe.Free();               // never entered the tree, so Free not QueueFree
 		return (label, icon);
 	}

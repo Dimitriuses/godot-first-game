@@ -126,6 +126,38 @@ tumbling when held motionless, release rolling vs. not rolling, the roll running
 frame and emitting `DiceRolled` exactly once, grabbing a die mid-roll, and a second `Roll()`
 being ignored while one is in flight.
 
+**`_Input` runs before the GUI sees the event, and before physics picking.** Three
+consequences, all of which have bitten:
+
+- A click on the palette or the die list reaches `GameManager._Input` too, so anything acting
+  on "a click on the board" has to ask `GetViewport().GuiGetHoveredControl()` first — without
+  it, placing a copy drops a die behind whichever panel was clicked.
+- A press on the die menu must be left alone entirely: closing the panel on the press means
+  the button never sees the release and no item ever fires.
+- **A click on a die reaches `_Input` before `Dice.InputEvent`.** Anything that has to know
+  whether the click landed on a die must ask the physics world itself (`DieAt`), because
+  waiting for the die to report is waiting for a decision `_Input` has already made. Linking
+  cancelled itself this way: `_Input` treated every click as "somewhere else" and cleared the
+  pending pair a frame before the die said "it was me".
+
+**Read the click's own state, not the machine's.** Position comes from
+`InputEventMouseButton.Position` and modifiers from `.ShiftPressed`, never from
+`GetViewport().GetMousePosition()` or `Input.IsKeyPressed`. They agree in the game and not in
+a harness — `Input.WarpMouse` does nothing headless and synthetic key events do not reach
+`Input.IsKeyPressed` — and the event is the more correct source anyway: a click means where
+and how it was made, not what the keyboard looks like by the time it is handled.
+
+**Frame zero of a landing clip is the die still in the air**, blurred past recognition. Any
+still picture of a die — a palette icon, a drag ghost — wants the *last* frame, which is the
+resting pose. `Dice.RestingFrame(face)` is the one place that knows this; the copy ghost was
+built with frame 0 and showed a smear.
+
+**Test the click path, not the click handler.** That last bug passed a test that emitted
+`input_event` on the die directly, which is the one route a real click never takes. Drive
+`GameManager._Input` and let the die handler follow, as the engine does. Use the *event's*
+position rather than `GetViewport().GetMousePosition()` while you are at it — they are the
+same thing in the game and not in a harness, where `Input.WarpMouse` does nothing.
+
 **`Roll()` declines while a roll is running; `Throw()` restarts it.** The guard is there so a
 die knocked about mid-clip finishes the throw it is in, and the Space key has to get past it or
 a board of dice drifts permanently out of phase — see KNOWNISSUES 3. Anything that adds a new
@@ -287,6 +319,19 @@ quantises the twist, `resolve_axis` turns the reference from an axis into a dire
 `twist_offset_deg` says where the artwork sits. Do not set `face_symmetry` to the number of
 steps you want — `corner_angle` takes its moment at that order, and a twelve-fold moment of a
 kite is noise.
+
+**A linked pair is one entry, not two.** A percentile d10 and a plain one can be read as a
+d100: `Dice.Partner` holds the link, `Dice.PairPercent` does the arithmetic, and the die list
+merges them into a single `d100 #2+#3  34%` row drawn by the tens die. Both halves are taken
+modulo their face count first, because the face printed `0` (and `00`) is stored as ten — and
+two zeroes is the one combination that cannot mean nothing, so it means a hundred. Merging the
+row is not cosmetic: showing the pair against both dice would double it in the **Total**.
+`GameManager` owns the pairing and must set and clear both sides together, including when one
+of them is deleted.
+
+A pair is also **dragged** as one: `SelectOnly` pulls the partner in with it, which puts two
+dice in the selection and so takes the existing group-drag path — the same one Shift uses. No
+new movement code, and letting go throws both, which is what re-rolls the percentage.
 
 **A face's number and a die's value are not the same thing.** `Dice.ValueStep` scales one into
 the other: the stored result is always 1..`FaceCount`, because that names the clip and is what

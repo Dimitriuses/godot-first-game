@@ -19,6 +19,12 @@ detection and `AnimatedSprite2D`.
 | **Tab** or **right-edge arrow** | open or close the dice palette |
 | **Drag a die from the palette** | add another die to the board |
 | **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
+| **Right-click a die** | open its menu: what it is, what it shows, and Roll / Theme / Copy / Link / Delete |
+| **Link**, on either d10 | pick the other one; the pair then reads as one **d100**, 1–100% — and thereafter picks up, moves and throws as one |
+| **R** with a die under the cursor | roll that one die where it stands |
+| **C** with a die under the cursor | take a copy; the next left-click puts it down |
+| **Shift** while placing a copy | keep it on the cursor and stamp another |
+| **Escape** | close the menu, or drop a copy you have not placed |
 | **Left-click and drag the die** | grab it — a pin joint follows the cursor |
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
@@ -87,10 +93,11 @@ not drift — [ROADMAP.md](ROADMAP.md) item 9, the largest piece of work left.
 
 ```
 scenes/     game.tscn (board, walls, bounds area, UI), dice.tscn, Player.tscn
-scripts/    GameManager.cs   drag/release, respawn, bounds handling
+scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Dice.cs          roll result + face animations
             DicePalette.cs   right-side drag-to-spawn dice menu
             DiceHud.cs       sorted die values, total and deletion controls
+            DiceMenu.cs      the right-click menu for one die
             Player.cs        board-piece stub, unused (board game dropped)
 assets/     dice/            die animation frames, a folder per die:
                              d4 d6 d6n d8 d10 d10p d12 d20
