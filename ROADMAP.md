@@ -719,6 +719,20 @@ single-threaded export — and by default it already would.
 **Exit condition.** If .NET web export ever ships, all of this is deletable: drop `web/`, drop
 the workflow, export the C# project directly. That line in the Godot docs is the thing to watch.
 
+Re-checked against 4.4.1 in August 2026 by adding a Web preset and running the export. The
+editor refuses before it starts, in as many words: *"Export to Web is currently not supported
+in Godot 4 when using C#/.NET."* Still blocked, still item 9.
+
+**The theme shader does not need porting.** `.gdshader` is language-agnostic, so
+`shaders/dice_theme.gdshader` crosses to the GDScript tree verbatim — the one part of the C#
+side that costs nothing. It is written for this target: everything in it is GLSL ES 3.00, which
+is what a WebGL2 export compiles to, and the neighbourhood taps in mode 3 use `textureLod`
+rather than `texture` because implicit-derivative sampling inside non-uniform control flow is
+undefined in that dialect. Threading does not enter into it — `thread_support` is a WebAssembly
+setting and shaders run on the GPU — but single-threaded builds have no background shader
+compilation, so the one program should be warmed during load rather than on the first throw.
+See [tools/theme-lab/README.md](tools/theme-lab/README.md).
+
 ### 9a. The port
 
 About 940 lines across five scripts, of which `Player.cs` is dead already (item 3), so four

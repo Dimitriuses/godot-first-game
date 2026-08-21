@@ -1,9 +1,14 @@
 using Godot;
+using System.Collections.Generic;
 
 public partial class DicePalette : Control
 {
+	/// `theme` is the slot's own colour scheme, set by right-clicking it. It travels with
+	/// the spawn rather than being looked up afterwards, because by the time the die
+	/// exists the drag that asked for it is over.
 	[Signal]
-	public delegate void SpawnRequestedEventHandler(PackedScene scene, Vector2 screenPosition);
+	public delegate void SpawnRequestedEventHandler(PackedScene scene,
+		Vector2 screenPosition, int theme);
 
 	public Godot.Collections.Array<PackedScene> DiceScenes { get; set; } = new();
 
@@ -32,8 +37,15 @@ public partial class DicePalette : Control
 	private TextureRect dragPreview;
 	private PanelContainer nameTag;
 	private Label nameTagLabel;
+	// One entry per die in the pack, in the order they sit in the grid.
+	private readonly List<Button> slotButtons = new();
+	private readonly List<TextureRect> slotIcons = new();
+	private readonly List<int> slotThemes = new();
+	private readonly List<string> slotNames = new();
+
 	private PackedScene draggingScene;
 	private Texture2D draggingIcon;
+	private int draggingSlot = -1;
 	private bool isOpen;
 	private bool isDraggingIcon;
 	private Tween drawerTween;
@@ -64,14 +76,19 @@ public partial class DicePalette : Control
 			|| mouseButton.ButtonIndex != MouseButton.Left || mouseButton.Pressed)
 			return;
 
-		Vector2 mouse = GetViewport().GetMousePosition();
+		// The release's own position, not the current cursor. They are the same thing in
+		// the game and not in a harness — Input.WarpMouse does nothing headless — and the
+		// drop should mean where the button came up, which is what the event carries.
+		Vector2 mouse = mouseButton.Position;
 		isDraggingIcon = false;
 		dragPreview?.QueueFree();
 		dragPreview = null;
 
 		if (mouse.X > DrawerLeft + DrawerWidth && draggingScene != null)
-			EmitSignal(SignalName.SpawnRequested, draggingScene, mouse);
+			EmitSignal(SignalName.SpawnRequested, draggingScene, mouse,
+				draggingSlot >= 0 ? slotThemes[draggingSlot] : DiceTheme.Bone);
 		draggingScene = null;
+		draggingSlot = -1;
 		GetViewport().SetInputAsHandled();
 	}
 
@@ -128,12 +145,15 @@ public partial class DicePalette : Control
 			AddDieOption(grid, label, CropToDie(icon), scene);
 		}
 
+		// Both gestures in one label at one size. As two labels they cost a third line,
+		// and the drawer grew until it was all but touching the die list below it.
 		var hint = new Label
 		{
-			Text = "Drag a die onto\nthe board",
+			Text = "Drag a die onto the board\nRight-click for a theme",
 			HorizontalAlignment = HorizontalAlignment.Center,
-			Modulate = new Color(0.78f, 0.82f, 0.9f)
+			Modulate = new Color(0.74f, 0.78f, 0.88f)
 		};
+		hint.AddThemeFontSizeOverride("font_size", 12);
 		content.AddChild(hint);
 
 		toggleButton = new Button
@@ -180,21 +200,76 @@ public partial class DicePalette : Control
 	private void AddDieOption(Container list, string label, Texture2D icon,
 		PackedScene scene)
 	{
+		int slot = slotButtons.Count;
+
 		// No caption on the button. Eight of them will not fit beside the icons at this
 		// size, and the die itself says which it is — except for the two pairs that
 		// share a shape, which is what the hover name is for.
 		var button = new Button
 		{
-			Icon = icon,
-			ExpandIcon = true,
+			Name = $"DieSlot{slot}",
 			CustomMinimumSize = new Vector2(ButtonSize, ButtonSize),
 			FocusMode = FocusModeEnum.None
 		};
-		button.AddThemeConstantOverride("icon_max_width", (int)ButtonSize - IconPadding * 2);
-		button.GuiInput += e => OnDieButtonInput(e, scene, icon);
+		button.GuiInput += e => OnDieButtonInput(e, scene, icon, slot);
 		button.MouseEntered += () => ShowNameTag(label, button);
 		button.MouseExited += () => { if (nameTag != null) nameTag.Visible = false; };
 		list.AddChild(button);
+
+		// The die goes in a child rather than in the button's own Icon, because a themed
+		// slot needs a material and a material on the Button would recolour its
+		// background along with the die.
+		var art = new TextureRect
+		{
+			Name = "Art",
+			Texture = icon,
+			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+			MouseFilter = MouseFilterEnum.Ignore
+		};
+		art.SetAnchorsPreset(LayoutPreset.FullRect);
+		art.OffsetLeft = IconPadding;
+		art.OffsetTop = IconPadding;
+		art.OffsetRight = -IconPadding;
+		art.OffsetBottom = -IconPadding;
+		button.AddChild(art);
+
+		slotButtons.Add(button);
+		slotIcons.Add(art);
+		slotThemes.Add(DiceTheme.Bone);
+		slotNames.Add(label);
+	}
+
+	/// <summary>
+	/// Which slot a Control belongs to, or -1. Asked with whatever
+	/// <c>GuiGetHoveredControl</c> returned, which may be the button or something inside
+	/// it, so the walk goes upward.
+	/// </summary>
+	public int SlotOf(Node control)
+	{
+		for (Node node = control; node != null; node = node.GetParent())
+		{
+			int index = slotButtons.IndexOf(node as Button);
+			if (index >= 0)
+				return index;
+		}
+		return -1;
+	}
+
+	public int SlotTheme(int slot) =>
+		slot >= 0 && slot < slotThemes.Count ? slotThemes[slot] : DiceTheme.Bone;
+
+	public string SlotName(int slot) =>
+		slot >= 0 && slot < slotNames.Count ? slotNames[slot] : "";
+
+	/// Paint a slot, and remember it. Only the dice made from here afterwards are
+	/// affected — what is already on the board keeps whatever it was given.
+	public void SetSlotTheme(int slot, int theme)
+	{
+		if (slot < 0 || slot >= slotThemes.Count)
+			return;
+		slotThemes[slot] = theme;
+		slotIcons[slot].Material = DiceTheme.MaterialFor(theme);
 	}
 
 	/// <summary>
@@ -278,7 +353,8 @@ public partial class DicePalette : Control
 		return (label, icon);
 	}
 
-	private void OnDieButtonInput(InputEvent @event, PackedScene scene, Texture2D icon)
+	private void OnDieButtonInput(InputEvent @event, PackedScene scene, Texture2D icon,
+		int slot)
 	{
 		if (@event is not InputEventMouseButton mouseButton
 			|| mouseButton.ButtonIndex != MouseButton.Left || !mouseButton.Pressed)
@@ -287,6 +363,7 @@ public partial class DicePalette : Control
 		isDraggingIcon = true;
 		draggingScene = scene;
 		draggingIcon = icon;
+		draggingSlot = slot;
 		dragPreview = new TextureRect
 		{
 			Texture = draggingIcon,
@@ -295,7 +372,9 @@ public partial class DicePalette : Control
 			Size = new Vector2(96, 96),
 			Modulate = new Color(1, 1, 1, 0.8f),
 			MouseFilter = MouseFilterEnum.Ignore,
-			ZIndex = 100
+			ZIndex = 100,
+			// The ghost wears the slot's colour, so what you drop is what you dragged.
+			Material = DiceTheme.MaterialFor(slotThemes[slot])
 		};
 		AddChild(dragPreview);
 		dragPreview.Position = GetViewport().GetMousePosition() - dragPreview.Size / 2f;

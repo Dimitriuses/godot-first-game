@@ -461,6 +461,10 @@ public partial class DiceHud : Control
 				if (frame != null)
 				{
 					entry.Icon.Texture = frame;
+					// The row wears whatever the die is wearing — taken from the sprite
+					// rather than looked up, because the die swaps material as it spins
+					// and the row has to follow it. A reference assignment either way.
+					entry.Icon.Material = sprite.Material;
 					entry.Icon.Size = frame.GetSize() * entry.IconZoom;
 					entry.Icon.Position = new Vector2(IconSize, IconSize) / 2f
 						- entry.IconCentre * entry.IconZoom;

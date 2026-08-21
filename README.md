@@ -19,7 +19,8 @@ detection and `AnimatedSprite2D`.
 | **Tab** or **left-edge arrow** | open or close the dice palette |
 | **Drag a die from the palette** | add another die to the board |
 | **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
-| **Right-click a die** | open its menu: what it is, what it shows, and Roll / Theme / Copy / Link / Delete |
+| **Right-click a palette die** | choose the colour that kind of die comes out in from now on |
+| **Right-click a die** | open its menu: what it is, what it shows, Roll / Copy / Link / Delete, and seven colour schemes |
 | **Right-click the board** | open the board menu: how many dice are out, and Throw all / Respawn / Delete all |
 | **Link**, on either d10 | pick the other one; the pair then reads as one **d100**, 1–100% — and thereafter picks up, moves and throws as one |
 | **R** with a die under the cursor | roll that one die where it stands |
@@ -37,6 +38,14 @@ detection and `AnimatedSprite2D`.
 | **× in a die-list row** | remove that die; it appears when the row is pointed at |
 | **Delete All** | remove every die from the board |
 | **"Respawn" button** | arrange all dice near the centre and kill their velocity |
+
+Dice come in seven colour schemes — bone, crimson, emerald, sapphire, amber, obsidian and
+ivory. Nothing is re-rendered for them and there are no extra images: a small shader reads
+each pixel's luminance and looks the colour up, so a themed die tumbles, blurs and lands
+exactly as the original does. Colouring a die from its own menu paints that die; colouring
+one in the palette sets what the *next* one of that kind comes out as, and leaves the board
+alone. See [tools/theme-lab/README.md](tools/theme-lab/README.md) for how the schemes work
+and what else was tried.
 
 The die list is live rather than a snapshot: every row carries its own die and tumbles
 along with it while a throw is in the air. A rolling die withholds its number — the
@@ -103,8 +112,10 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Dice.cs          roll result + face animations
             DicePalette.cs   left-side drag-to-spawn dice menu
             DiceHud.cs       live die list, total and deletion controls
-            DiceMenu.cs      the right-click menu, for a die or the board
+            DiceMenu.cs      the right-click menu, for a die, the board or the palette
+            DiceTheme.cs     the colour schemes, and the materials that apply them
             Player.cs        board-piece stub, unused (board game dropped)
+shaders/    dice_theme.gdshader  recolours a die without re-rendering it
 assets/     dice/            die animation frames, a folder per die:
                              d4 d6 d6n d8 d10 d10p d12 d20
                              (see docs/ASSETS.md)

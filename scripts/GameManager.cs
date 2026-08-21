@@ -34,12 +34,14 @@ public partial class GameManager : Node2D
 	private Dice hoveredDie;
 	private DiceHud diceHud;
 	private DiceMenu diceMenu;
+	private DicePalette palette;
 	private CanvasLayer uiLayer;
 
 	/// A copy waiting to be put down: the die type taken, the face it was showing, and
 	/// the ghost that follows the cursor until a click places it.
 	private PackedScene pendingCopyScene;
 	private int pendingCopyFace;
+	private int pendingCopyTheme;
 	private TextureRect copyPreview;
 
 	/// The die waiting to be paired, while its possible partners stand highlighted.
@@ -65,10 +67,10 @@ public partial class GameManager : Node2D
 
 		uiLayer = new CanvasLayer { Name = "GameUiLayer" };
 		AddChild(uiLayer);
-		var palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
+		palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
 		uiLayer.AddChild(palette);
 		palette.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		palette.SpawnRequested += SpawnDie;
+		palette.SpawnRequested += (scene, at, theme) => SpawnDie(scene, at, (int)theme);
 
 		diceHud = new DiceHud { Name = "DiceHud" };
 		uiLayer.AddChild(diceHud);
@@ -87,6 +89,7 @@ public partial class GameManager : Node2D
 		diceMenu.ThrowAllRequested += ThrowAllDice;
 		diceMenu.RespawnRequested += OnSpawnButton;
 		diceMenu.DeleteAllRequested += DeleteAllDice;
+		diceMenu.ThemeRequested += OnThemeChosen;
 
 		foreach (Node child in GetChildren())
 			if (child is Dice die)
@@ -309,6 +312,19 @@ public partial class GameManager : Node2D
 			if (wasPending)
 				return;
 
+			// A right-click in the palette is about the kind of die, not about any die
+			// on the board, so it has to be asked of the GUI before the physics world:
+			// the pointer is over a Control, and DieAt would find nothing and open the
+			// board menu behind the panel that was clicked.
+			int slot = palette.SlotOf(GetViewport().GuiGetHoveredControl());
+			if (slot >= 0)
+			{
+				diceMenu.OpenPalette(slot, palette.SlotName(slot), point,
+					palette.SlotTheme(slot));
+				GetViewport().SetInputAsHandled();
+				return;
+			}
+
 			// Both menus open from here rather than from the die's own click handler,
 			// which reports after this has already run and decided.
 			Dice under = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
@@ -493,13 +509,15 @@ public partial class GameManager : Node2D
 		ClearDragState();
 	}
 
-	public void SpawnDie(PackedScene scene, Vector2 screenPosition)
+	public void SpawnDie(PackedScene scene, Vector2 screenPosition,
+		int theme = DiceTheme.Bone)
 	{
 		if (scene == null)
 			return;
 
 		Dice die = scene.Instantiate<Dice>();
 		AddChild(die);
+		die.Theme = theme;
 		Vector2 viewportSize = GetViewportRect().Size;
 		die.GlobalPosition = new Vector2(
 			Mathf.Clamp(screenPosition.X, 80f, viewportSize.X - 240f),
@@ -663,6 +681,7 @@ public partial class GameManager : Node2D
 		CancelCopy();
 		pendingCopyScene = scene;
 		pendingCopyFace = die.GetResult();      // a copy shows what it was copied from
+		pendingCopyTheme = die.Theme;           // and wears what it was copied from
 
 		copyPreview = new TextureRect
 		{
@@ -671,6 +690,7 @@ public partial class GameManager : Node2D
 			// picture the palette puts on its buttons, so a copy on the cursor looks
 			// like the thing being copied.
 			Texture = DicePalette.CropToDie(die.RestingFrame(pendingCopyFace)),
+			Material = DiceTheme.MaterialFor(pendingCopyTheme),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
 			Size = new Vector2(96, 96),
@@ -707,10 +727,11 @@ public partial class GameManager : Node2D
 
 		PackedScene scene = pendingCopyScene;
 		int face = pendingCopyFace;
+		int theme = pendingCopyTheme;
 		if (!keepGhost)
 			CancelCopy();
 
-		SpawnDie(scene, screenPoint);
+		SpawnDie(scene, screenPoint, theme);
 		// SpawnDie selects what it made, so this is the copy and not the original.
 		activeDie?.PlaceOnFace(face);
 		return true;
@@ -767,6 +788,32 @@ public partial class GameManager : Node2D
 			activeDie = dice.Count > 0 ? dice[0] : null;
 		die.SetHovered(false);
 		die.QueueFree();
+	}
+
+	/// <summary>
+	/// A colour scheme was picked. What it lands on depends on where the menu was opened:
+	/// a slot in the palette repaints that slot and everything made from it afterwards,
+	/// a die on the board repaints only itself.
+	///
+	/// The menu does not decide this — it reports the choice and the board applies it,
+	/// which is the same split every other item in that panel already uses.
+	/// </summary>
+	private void OnThemeChosen(int theme)
+	{
+		if (diceMenu.PaletteSlot >= 0)
+		{
+			palette.SetSlotTheme(diceMenu.PaletteSlot, theme);
+			return;
+		}
+
+		Dice die = diceMenu.Target;
+		if (die == null || !IsInstanceValid(die))
+			return;
+		die.Theme = theme;
+		// Both halves of a d100 together: they are read as one die, so a pair wearing two
+		// colours would be a stranger thing than the pair not matching the board.
+		if (die.Partner != null && IsInstanceValid(die.Partner))
+			die.Partner.Theme = theme;
 	}
 
 	/// Scatter every die across the board and roll it — the space bar, and the board

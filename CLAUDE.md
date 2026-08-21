@@ -145,7 +145,11 @@ consequences, all of which have bitten:
 
 **Read the click's own state, not the machine's.** Position comes from
 `InputEventMouseButton.Position` and modifiers from `.ShiftPressed`, never from
-`GetViewport().GetMousePosition()` or `Input.IsKeyPressed`. They agree in the game and not in
+`GetViewport().GetMousePosition()` or `Input.IsKeyPressed`. `DicePalette` broke this rule
+for its drop until August 2026 and the bug was invisible until a harness drove the drag:
+headless the real cursor sits at the origin, so every drop landed left of the drawer and
+silently spawned nothing. A live `_Process` that follows the pointer is the one honest use
+of `GetMousePosition` — the drag ghost still uses it. They agree in the game and not in
 a harness — `Input.WarpMouse` does nothing headless and synthetic key events do not reach
 `Input.IsKeyPressed` — and the event is the more correct source anyway: a click means where
 and how it was made, not what the keyboard looks like by the time it is handled.
@@ -266,6 +270,35 @@ why. Do not rebuild it without reading that first.
   `GetViewport().GuiGetHoveredControl()` and treat anything inside the row as the row.
   Null-guard it: teardown refreshes the HUD from a dying die after the HUD has left the
   tree, and out of the tree there is no viewport to ask.
+- **Godot will not pass a built-in sampler into a user function.** `near_edge(TEXTURE, UV)`
+  compiles, renders correctly, and logs
+  `!actions.custom_samplers.has(function->arguments[j].tex_builtin)` once per call every
+  time the shader loads. It says "Continuing" and it means it — but a construct the engine
+  complains about is not one to ship to a second backend, so `dice_theme.gdshader` inlines
+  that block instead. Two neighbours of the same rule, both discovered by compile error:
+  `TEXTURE` is invisible inside a user function at all, and `TEXTURE_PIXEL_SIZE` exists
+  only in `vertex()` — use `textureSize(TEXTURE, 0)`. And `return` is forbidden in an entry
+  function, so no early-outs in `fragment()`.
+- **`idle1` is not greyscale, and it is the only clip that is not.** The fast spin is
+  rendered through a sweeping rainbow — `set_palette_gradient` in
+  `tools/dice-render/render.py`, HSV saturation 0.55 — where everything else measures
+  under 0.09. A recolour that reads luminance goes wrong there twice: the body pulses as
+  the hue sweeps (yellow frames read bright, blue ones dark), and the sub-cut pixels the
+  body ramp deliberately keeps are dark *rainbow* rather than near-black, so a crimson die
+  spins up with a gold rim round it. Both are corrected, and both are gated on a `rainbow`
+  uniform that `Dice.cs` sets from the clip that is playing. **Do not try to detect it per
+  pixel**: the d6's red pip is more saturated than the rainbow is, so any chroma test
+  greys out the pip and misreads the clip in the same stroke. The correction for the shade
+  falls out of the renderer's own maths — the tint is built with HSV value 1.0, so the
+  pixel's brightest channel *is* the band's shade with the hue divided back out.
+- **A theme is paint, never state.** `Dice.Theme` sets a material on the sprite and touches
+  nothing else: the same clips play, the same face comes up, and the frame the result is
+  read from is the frame it always was. Bone is `null` rather than a material that
+  reproduces the artwork, so an unthemed die is the original by construction. The materials
+  are shared per theme — the uniforms are identical, and it keeps a single-threaded web
+  build to one shader program. Anything else that draws die frames needs the same material
+  or it will be the only unthemed thing on screen: the palette slot, the drag ghost and the
+  die-list thumbnail all take it.
 - **A colliding node name is thrown away, not suffixed.** `AddChild` on a second node
   called `DieRow` does not produce `DieRow2`; it produces `@Control@42`, built from the
   *class* name, and the name you asked for is gone. Anything that finds nodes by name — a

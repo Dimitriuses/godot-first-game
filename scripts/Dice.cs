@@ -60,6 +60,7 @@ public partial class Dice : RigidBody2D
 	[Export] public float ThrowSpeedMax = 400f;
 	[Export] public float ThrowSpinMax = 9f;
 
+	private int themeIndex = DiceTheme.Bone;
 	private int currentResult = 1;
 	private int faceCount;              // 0 until first read; see FaceCount
 	private bool isHeld;
@@ -68,6 +69,43 @@ public partial class Dice : RigidBody2D
 	private float moveSpeed;
 	private Vector2 lastPosition;
 	private ulong lastCollisionRollMs;
+
+	/// <summary>
+	/// The colour scheme this die is wearing, as an index into <see cref="DiceTheme"/>.
+	///
+	/// Lives on the sprite as a material rather than anywhere in this class's state
+	/// machine, because it changes nothing about how the die behaves — the same clips
+	/// play, the same face comes up, and the frame the result is read from is the frame
+	/// it always was. A theme is only ever how the die is painted.
+	/// </summary>
+	public int Theme
+	{
+		get => themeIndex;
+		set
+		{
+			themeIndex = value;
+			RefreshThemeMaterial();
+		}
+	}
+
+	/// <summary>
+	/// Keep the sprite on the right material for the clip it is playing.
+	///
+	/// `idle1` is the one clip rendered through a rainbow rather than the grey palette,
+	/// and a themed die has to correct for that; the shader is told which case it is in
+	/// rather than guessing per pixel. Cheap enough to check every frame — it is a
+	/// reference comparison against a material that is shared by every die wearing the
+	/// same theme.
+	/// </summary>
+	private void RefreshThemeMaterial()
+	{
+		if (AnimatedSprite == null)
+			return;
+		ShaderMaterial wanted = DiceTheme.MaterialFor(themeIndex,
+			AnimatedSprite.Animation == Idle1);
+		if (AnimatedSprite.Material != wanted)
+			AnimatedSprite.Material = wanted;
+	}
 
 	public bool IsHeld => isHeld;
 	public bool IsRolling => isRolling;
@@ -207,6 +245,10 @@ public partial class Dice : RigidBody2D
 
 		if (isHeld)
 			UpdateHeldSpin();
+
+		// Unconditional, not folded into UpdateHeldSpin: that only runs while the die is
+		// in hand, and letting go is exactly when the rainbow clip stops playing.
+		RefreshThemeMaterial();
 	}
 
 	// ------------------------------------------------------------------ dragging

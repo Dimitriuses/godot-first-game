@@ -22,6 +22,11 @@ public partial class DiceMenu : Control
 	public event Action<Dice> LinkRequested;
 	public event Action<Dice> UnlinkRequested;
 
+	/// A colour scheme was chosen, for whatever the menu is open on — a die, or a slot in
+	/// the palette. Which of those it is, the board decides; the menu only reports the
+	/// choice, the same way every other item here does.
+	public event Action<int> ThemeRequested;
+
 	public event Action ThrowAllRequested;
 	public event Action RespawnRequested;
 	public event Action DeleteAllRequested;
@@ -49,11 +54,17 @@ public partial class DiceMenu : Control
 	private Button linkItem;
 	private VBoxContainer dieItems;
 	private VBoxContainer boardItems;
+	private VBoxContainer themeItems;
+	private readonly System.Collections.Generic.List<Button> swatches = new();
 	private Button throwAllItem;
 	private Button respawnItem;
 	private Button deleteAllItem;
 	private Dice target;
 	private bool linkedNow;     // whether linkItem currently means "Unlink"
+
+	/// Which palette slot the menu was opened on, or -1 when it was opened on a die or
+	/// on the board. The board reads it to know what a chosen theme applies to.
+	public int PaletteSlot { get; private set; } = -1;
 
 	/// The die the open menu belongs to, or null when it is closed.
 	public Dice Target => panel != null && panel.Visible && IsInstanceValid(target)
@@ -91,7 +102,10 @@ public partial class DiceMenu : Control
 			return;
 
 		target = die;
+		PaletteSlot = -1;
 		nameLabel.Text = string.IsNullOrEmpty(label) ? die.DisplayName : label;
+		MarkTheme(die.Theme);
+		themeItems.Visible = true;
 		valueLabel.Text = die.Value.ToString();
 		SetLinkage(linkage);
 		dieItems.Visible = true;
@@ -110,6 +124,8 @@ public partial class DiceMenu : Control
 	public void OpenBoard(Vector2 at, int count)
 	{
 		target = null;
+		PaletteSlot = -1;
+		themeItems.Visible = false;
 		nameLabel.Text = "BOARD";
 		valueLabel.Text = count.ToString();
 		dieItems.Visible = false;
@@ -119,6 +135,28 @@ public partial class DiceMenu : Control
 		deleteAllItem.Disabled = count == 0;
 		Show(at);
 		SetProcess(false);      // nothing here changes on its own
+	}
+
+	/// <summary>
+	/// The third way in: a right-click on a die in the palette, which sets what colour
+	/// that kind of die comes out in from now on.
+	///
+	/// Only the swatches — there is nothing to roll or delete, because there is no die
+	/// yet. Choosing here changes what the *next* one looks like, never what is already
+	/// on the board, which is why it is the palette that remembers it and not this menu.
+	/// </summary>
+	public void OpenPalette(int slot, string label, Vector2 at, int theme)
+	{
+		target = null;
+		PaletteSlot = slot;
+		nameLabel.Text = label;
+		valueLabel.Text = "";
+		dieItems.Visible = false;
+		boardItems.Visible = false;
+		themeItems.Visible = true;
+		MarkTheme(theme);
+		Show(at);
+		SetProcess(false);
 	}
 
 	/// Put the panel at the pointer, folding back rather than hanging off the edge — a
@@ -140,6 +178,7 @@ public partial class DiceMenu : Control
 	public void Close()
 	{
 		target = null;
+		PaletteSlot = -1;
 		if (panel != null)
 			panel.Visible = false;
 		SetProcess(false);
@@ -153,7 +192,9 @@ public partial class DiceMenu : Control
 	private void Build()
 	{
 		panel = new PanelContainer { Name = "Panel", MouseFilter = MouseFilterEnum.Stop };
-		panel.CustomMinimumSize = new Vector2(168, 0);
+		// Wide enough for the swatch strip: seven of them plus their gaps and the panel's
+		// own margins. The items were happy at 168 and do not mind the extra.
+		panel.CustomMinimumSize = new Vector2(196, 0);
 		var style = new StyleBoxFlat
 		{
 			BgColor = new Color("202536f2"),
@@ -194,7 +235,6 @@ public partial class DiceMenu : Control
 
 		AddItem(dieItems, "Roll", $"({(char)RollKey})", "Roll this die where it stands",
 			() => RollRequested?.Invoke(target));
-		AddItem(dieItems, "Theme", "", "Colour schemes — not built yet", null);
 		AddItem(dieItems, "Copy", $"({(char)CopyKey})",
 			"Take a copy, then click where to put it — hold Shift to keep stamping",
 			() => CopyRequested?.Invoke(target));
@@ -209,6 +249,18 @@ public partial class DiceMenu : Control
 		AddItem(dieItems, "Delete", "", "Remove this die from the board",
 			() => DeleteRequested?.Invoke(target));
 
+		// Between the die's items and its Delete, and shared with the palette menu, which
+		// shows this and nothing else.
+		themeItems = new VBoxContainer { Name = "ThemeItems" };
+		themeItems.AddThemeConstantOverride("separation", 4);
+		content.AddChild(themeItems);
+		themeItems.AddChild(new HSeparator());
+		var themeCaption = new Label { Text = "Theme" };
+		themeCaption.AddThemeFontSizeOverride("font_size", 13);
+		themeCaption.Modulate = new Color(0.78f, 0.82f, 0.92f);
+		themeItems.AddChild(themeCaption);
+		BuildSwatches(themeItems);
+
 		boardItems = new VBoxContainer { Name = "BoardItems", Visible = false };
 		boardItems.AddThemeConstantOverride("separation", 4);
 		content.AddChild(boardItems);
@@ -222,6 +274,67 @@ public partial class DiceMenu : Control
 		boardItems.AddChild(new HSeparator());
 		deleteAllItem = AddItem(boardItems, "Delete all", "",
 			"Clear the board", () => DeleteAllRequested?.Invoke());
+	}
+
+	/// <summary>
+	/// One small square per colour scheme, showing the scheme rather than naming it.
+	///
+	/// Seven names would not fit and would not help — a colour is quicker to recognise
+	/// than to read. The name is on the tooltip for the two that are hard to tell apart
+	/// at this size.
+	/// </summary>
+	private void BuildSwatches(Container into)
+	{
+		var row = new HBoxContainer { Name = "Swatches" };
+		row.AddThemeConstantOverride("separation", 3);
+		into.AddChild(row);
+
+		for (int i = 0; i < DiceTheme.Count; i++)
+		{
+			int theme = i;
+			var button = new Button
+			{
+				Name = $"Swatch{i}",
+				CustomMinimumSize = new Vector2(21, 21),
+				TooltipText = DiceTheme.NameOf(i),
+				FocusMode = FocusModeEnum.None,
+				SizeFlagsHorizontal = SizeFlags.ExpandFill
+			};
+			button.Pressed += () =>
+			{
+				// Reported before closing, so the board can still ask what the menu was
+				// open on. Close clears that.
+				ThemeRequested?.Invoke(theme);
+				Close();
+			};
+			row.AddChild(button);
+			swatches.Add(button);
+		}
+		MarkTheme(DiceTheme.Bone);
+	}
+
+	/// Paint the swatches, and ring the one that is already on. Every state of a Button
+	/// has to be overridden or it repaints itself grey the moment it is hovered.
+	private void MarkTheme(int theme)
+	{
+		for (int i = 0; i < swatches.Count; i++)
+		{
+			bool active = i == theme;
+			var style = new StyleBoxFlat
+			{
+				BgColor = DiceTheme.Swatch(i),
+				BorderColor = active ? new Color("ffe6a8") : new Color("00000060")
+			};
+			style.SetBorderWidthAll(active ? 2 : 1);
+			style.SetCornerRadiusAll(5);
+			foreach (string state in new[] { "normal", "pressed", "disabled" })
+				swatches[i].AddThemeStyleboxOverride(state, style);
+
+			var lit = (StyleBoxFlat)style.Duplicate();
+			lit.BorderColor = new Color("ffffff");
+			lit.SetBorderWidthAll(2);
+			swatches[i].AddThemeStyleboxOverride("hover", lit);
+		}
 	}
 
 	/// <summary>
@@ -257,6 +370,9 @@ public partial class DiceMenu : Control
 	{
 		var button = new Button
 		{
+			// Named after the item so it can be picked out of the tree — by the remote
+			// inspector, and by a harness driving the menu the way a player does.
+			Name = text.Replace(" ", ""),
 			Text = hint.Length > 0 ? $"{text}   {hint}" : text,
 			Alignment = HorizontalAlignment.Left,
 			TooltipText = tooltip,
