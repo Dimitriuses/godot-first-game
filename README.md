@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Drag any of **eight dice** — d4, d6, d8, d10, d12, d20, a numbered d6 and a percentile d10 —
-from the right-side palette, sling them across a pixel-art board, and let go: they tumble, land
+from the palette down the left, sling them across a pixel-art board, and let go: they tumble, land
 and report a number. My first project in **Godot 4**, written in **C#** in May–June 2025 while
 learning the engine's 2D physics: `RigidBody2D`, `PinJoint2D` mouse dragging, `Area2D` bounds
 detection and `AnimatedSprite2D`.
@@ -16,7 +16,7 @@ detection and `AnimatedSprite2D`.
 
 | Input | Action |
 |---|---|
-| **Tab** or **right-edge arrow** | open or close the dice palette |
+| **Tab** or **left-edge arrow** | open or close the dice palette |
 | **Drag a die from the palette** | add another die to the board |
 | **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
 | **Right-click a die** | open its menu: what it is, what it shows, and Roll / Theme / Copy / Link / Delete |
@@ -32,11 +32,16 @@ detection and `AnimatedSprite2D`.
 | **Hold Shift, then drag a die** | select and throw every die together |
 | **Space** | throw every die — they scatter across the board as well as rolling, including any still mid-roll, and the board takes a knock |
 | **Hover a die on the board** | a small tag by the cursor names it and the number it is showing |
-| **Total button** | open or close the bottom-left die list |
-| **Hover a die-list row** | highlight its die on the board |
-| **× in a die-list row** | remove that die |
+| **Total button** | open or close the die list, below the palette |
+| **Hover a die-list row** | highlight its die on the board — both halves, for a d100 |
+| **× in a die-list row** | remove that die; it appears when the row is pointed at |
 | **Delete All** | remove every die from the board |
 | **"Respawn" button** | arrange all dice near the centre and kill their velocity |
+
+The die list is live rather than a snapshot: every row carries its own die and tumbles
+along with it while a throw is in the air. A rolling die withholds its number — the
+result is fixed the moment the throw starts, so printing it early would give the throw
+away — and the total marks itself provisional until the last die has landed.
 
 There is no score and no way to lose. It is a toy, not a game.
 
@@ -96,8 +101,8 @@ not drift — [ROADMAP.md](ROADMAP.md) item 9, the largest piece of work left.
 scenes/     game.tscn (board, walls, bounds area, UI), dice.tscn, Player.tscn
 scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Dice.cs          roll result + face animations
-            DicePalette.cs   right-side drag-to-spawn dice menu
-            DiceHud.cs       sorted die values, total and deletion controls
+            DicePalette.cs   left-side drag-to-spawn dice menu
+            DiceHud.cs       live die list, total and deletion controls
             DiceMenu.cs      the right-click menu, for a die or the board
             Player.cs        board-piece stub, unused (board game dropped)
 assets/     dice/            die animation frames, a folder per die:

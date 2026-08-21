@@ -81,13 +81,17 @@ public partial class DiceMenu : Control
 			valueLabel.Text = die.Value.ToString();
 	}
 
-	public void Open(Dice die, Vector2 at, Linkage linkage = Linkage.Impossible)
+	/// `label` is the name the die list is calling this die — "d6 #2" rather than "d6"
+	/// once there are two of them. Passed in rather than worked out here, so the menu and
+	/// the list can never disagree about which die is which.
+	public void Open(Dice die, Vector2 at, Linkage linkage = Linkage.Impossible,
+		string label = null)
 	{
 		if (die == null || !IsInstanceValid(die))
 			return;
 
 		target = die;
-		nameLabel.Text = die.DisplayName;
+		nameLabel.Text = string.IsNullOrEmpty(label) ? die.DisplayName : label;
 		valueLabel.Text = die.Value.ToString();
 		SetLinkage(linkage);
 		dieItems.Visible = true;

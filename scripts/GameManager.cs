@@ -49,7 +49,6 @@ public partial class GameManager : Node2D
 	/// Seconds of shudder left, and the direction it runs along.
 	private float shakeLeft;
 	private Vector2 shakeAxis = Vector2.Right;
-	private int nextDieId = 1;
 	private bool isDragging;
 	private bool isGroupDragging;
 	private Vector2 lastMousePosition;
@@ -314,7 +313,8 @@ public partial class GameManager : Node2D
 			// which reports after this has already run and decided.
 			Dice under = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
 			if (under != null)
-				diceMenu.Open(under, point, LinkageOf(under));
+				diceMenu.Open(under, point, LinkageOf(under),
+					diceHud.LabelFor(under));
 			else
 				diceMenu.OpenBoard(point, dice.Count);
 			swallowNextDieClick = true;
@@ -378,7 +378,7 @@ public partial class GameManager : Node2D
 			return;
 
 		dice.Add(die);
-		diceHud.AddDie(die, nextDieId++, die.Value);
+		diceHud.AddDie(die, die.Value);
 		die.InputPickable = true;
 		die.DiceRolled += result => OnDiceRolled(die, result);
 		die.InputEvent += (Node viewport, InputEvent @event, long shapeIdx) =>

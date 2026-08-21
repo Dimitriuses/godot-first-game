@@ -13,8 +13,13 @@ public partial class DicePalette : Control
 	private const float ButtonSize = 50f;
 	private const float ButtonGap = 5f;
 	private const float DrawerMargin = 12f;
-	private const float DrawerWidth =
+	/// Public because the die list matches it: the two panels stack into one column down
+	/// the left edge, and a column whose halves are different widths reads as a mistake.
+	public const float DrawerWidth =
 		Columns * ButtonSize + (Columns - 1) * ButtonGap + DrawerMargin * 2;
+
+	/// How far in from the left edge the column sits. Shared with the die list below it.
+	public const float DrawerLeft = 16f;
 
 	/// Blank pixels left around the die inside its button.
 	private const int IconPadding = 3;
@@ -64,7 +69,7 @@ public partial class DicePalette : Control
 		dragPreview?.QueueFree();
 		dragPreview = null;
 
-		if (mouse.X < GetViewportRect().Size.X - DrawerWidth && draggingScene != null)
+		if (mouse.X > DrawerLeft + DrawerWidth && draggingScene != null)
 			EmitSignal(SignalName.SpawnRequested, draggingScene, mouse);
 		draggingScene = null;
 		GetViewport().SetInputAsHandled();
@@ -75,7 +80,7 @@ public partial class DicePalette : Control
 		// Only as tall as it needs to be. Anchored full height it was nine tenths empty
 		// once the dice fitted on two rows, which reads as something failing to load.
 		drawer = new PanelContainer { Name = "Drawer", MouseFilter = MouseFilterEnum.Stop };
-		drawer.SetAnchorsPreset(LayoutPreset.TopRight);
+		drawer.SetAnchorsPreset(LayoutPreset.TopLeft);
 		drawer.OffsetTop = DrawerTop;
 		AddChild(drawer);
 
@@ -134,12 +139,12 @@ public partial class DicePalette : Control
 		toggleButton = new Button
 		{
 			Name = "Toggle",
-			Text = "◀",
+			Text = "▶",
 			TooltipText = "Open dice menu",
 			MouseFilter = MouseFilterEnum.Stop,
 			FocusMode = FocusModeEnum.None
 		};
-		toggleButton.SetAnchorsPreset(LayoutPreset.TopRight);
+		toggleButton.SetAnchorsPreset(LayoutPreset.TopLeft);
 		toggleButton.Pressed += () => SetDrawerOpen(!isOpen, true);
 		AddChild(toggleButton);
 
@@ -198,7 +203,7 @@ public partial class DicePalette : Control
 	/// Anchored rather than following the cursor: the buttons sit on a grid, so a tag
 	/// pinned to one lands somewhere predictable. Level with the button it names, but
 	/// clear of the *drawer* rather than of the button — hung off the button it covered
-	/// whichever ones were to its left, which is three quarters of them.
+	/// whichever ones were beside it, which is three quarters of them.
 	/// </summary>
 	private void ShowNameTag(string label, Control button)
 	{
@@ -207,7 +212,8 @@ public partial class DicePalette : Control
 		nameTag.Visible = true;
 		Rect2 box = button.GetGlobalRect();
 		nameTag.Position = new Vector2(
-			Mathf.Max(8f, drawer.GetGlobalRect().Position.X - nameTag.Size.X - 10f),
+			Mathf.Min(drawer.GetGlobalRect().End.X + 10f,
+				GetViewportRect().Size.X - nameTag.Size.X - 8f),
 			box.Position.Y + (box.Size.Y - nameTag.Size.Y) / 2f);
 	}
 
@@ -299,10 +305,10 @@ public partial class DicePalette : Control
 	public void SetDrawerOpen(bool open, bool animate)
 	{
 		isOpen = open;
-		float panelLeft = open ? -DrawerWidth : 0f;
-		float panelRight = open ? 0f : DrawerWidth;
-		float toggleLeft = open ? -DrawerWidth - 48f : -48f;
-		float toggleRight = open ? -DrawerWidth - 8f : -8f;
+		float panelLeft = open ? DrawerLeft : -DrawerWidth;
+		float panelRight = open ? DrawerLeft + DrawerWidth : 0f;
+		float toggleLeft = open ? DrawerLeft + DrawerWidth + 8f : 8f;
+		float toggleRight = open ? DrawerLeft + DrawerWidth + 48f : 48f;
 
 		drawerTween?.Kill();
 		if (animate)
@@ -322,7 +328,7 @@ public partial class DicePalette : Control
 			toggleButton.OffsetRight = toggleRight;
 		}
 
-		toggleButton.Text = open ? "▶" : "◀";
+		toggleButton.Text = open ? "◀" : "▶";
 		toggleButton.TooltipText = open ? "Close dice menu" : "Open dice menu";
 	}
 }

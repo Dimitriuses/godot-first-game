@@ -38,13 +38,14 @@ public partial class Capture : Node
 	// much like the d20 at this size. The palette beside it still offers all eight.
 	private static readonly (Vector2 Pos, int Face, int Scene)[] Board =
 	{
-		(new Vector2(400, 272), 5, 1),      // d6
-		(new Vector2(702, 258), 3, 0),      // d4
-		(new Vector2(842, 402), 17, 7),     // d20
-		(new Vector2(468, 474), 7, 5),      // d10 percentile, which reports 70 not 7
-		(new Vector2(250, 232), 8, 3),      // d8
+		(new Vector2(430, 300), 5, 1),      // d6
+		(new Vector2(700, 250), 3, 0),      // d4
+		(new Vector2(862, 410), 17, 7),     // d20
+		(new Vector2(500, 480), 7, 5),      // d10 percentile, which reports 70 not 7
+		(new Vector2(958, 205), 8, 3),      // d8
 	};
-	// Clear of the orange floor decoration and of the die-list panel.
+	// Clear of the orange floor decoration and of the panels, which are both down the
+	// left-hand side now, leaving the whole right of the board free.
 	private static readonly Vector2 RollingDiePosition = new(599, 250);
 
 	// Below the board, right of the die list, left of the palette: no Control under it.

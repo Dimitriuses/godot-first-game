@@ -172,11 +172,19 @@ what found the original bug.
 
 ### Things that are hard to test this way
 
-Mouse input. The tests drove `Dice.StartDragging()` / `ReleaseFromDrag()` directly rather
-than synthesising clicks, so the `InputEvent` → `PinJoint2D` path in `GameManager` is not
-covered. Click and fling by hand once before calling a drag change done. Same for hover:
-`DiceHud.SetDieHovered` is called directly, and what a harness *can* check is that the
-signal is wired — `die.GetSignalConnectionList("mouse_entered").Count == 1`.
+Mouse input *on the dice*. The tests drove `Dice.StartDragging()` / `ReleaseFromDrag()`
+directly rather than synthesising clicks, so the `InputEvent` → `PinJoint2D` path in
+`GameManager` is not covered. Click and fling by hand once before calling a drag change
+done. Same for hovering a die: `DiceHud.SetDieHovered` is called directly, and what a
+harness *can* check is that the signal is wired —
+`die.GetSignalConnectionList("mouse_entered").Count == 1`.
+
+**Hovering a `Control`, though, is fully testable headless.** `Input.WarpMouse` does
+nothing, but `GetViewport().PushInput(new InputEventMouseMotion { Position = p })` moves the
+GUI's idea of the pointer, and `GuiGetHoveredControl()` then answers correctly; a pushed
+`InputEventMouseButton` pair presses the button under it. That is how the delete cross
+vanishing under the cursor was reproduced, and the reproduction is worth more than the fix:
+run the new check against the old code and watch it fail before believing it.
 
 Anything positioned from the cursor. `Input.WarpMouse` needs a real window, so the headless
 mouse sits at the origin. Note that Godot's GUI tracks the *operator's* pointer during a
@@ -250,6 +258,33 @@ why. Do not rebuild it without reading that first.
   extruded through: the command wins over the separation impulse. `GameManager` clamps
   positions back inside afterwards as a backstop. Steering with forces avoids the problem and
   tracks far too slowly to use — measured at 461px of lag.
+- **`mouse_entered` / `mouse_exited` mean "is this the hovered control", not "is the
+  pointer inside this rect".** A child that takes the mouse makes its parent fire
+  `mouse_exited`, even though the pointer never left the parent. The die list's rows hid
+  their delete cross on exit, so reaching for the cross made it vanish — it was still
+  clickable, being only transparent, but there was nothing left to aim at. Ask
+  `GetViewport().GuiGetHoveredControl()` and treat anything inside the row as the row.
+  Null-guard it: teardown refreshes the HUD from a dying die after the HUD has left the
+  tree, and out of the tree there is no viewport to ask.
+- **A colliding node name is thrown away, not suffixed.** `AddChild` on a second node
+  called `DieRow` does not produce `DieRow2`; it produces `@Control@42`, built from the
+  *class* name, and the name you asked for is gone. Anything that finds nodes by name — a
+  harness, the remote inspector — silently sees one of them. `DiceHud` numbers its rows
+  `DieRow{Seq}` for exactly this reason.
+- **The die list keeps its row nodes; it does not rebuild them.** It used to clear the
+  `VBoxContainer` and refill it on every change, which is why an added die blinked into
+  existence rather than arriving, and why nothing in a row could animate. `Refresh()` is now
+  structure only — create, retire, renumber, reorder — and `Tick()` settles what each row
+  *says* every frame. Two consequences worth keeping: rows are in spawn order rather than
+  sorted by value, because sorting reshuffled the whole list on every throw and gave a new
+  die nowhere predictable to arrive; and `Refresh()` reorders only when the live rows are
+  genuinely out of sequence, or a deleted row is yanked to the bottom before it has
+  finished collapsing.
+- **The list is numbered per die type, from one, every refresh.** A single counter that only
+  went up left `#3, #4, #7` after deletions — numbering dice that no longer existed. The
+  number is hidden entirely while a die is the only one of its kind, so a board with one of
+  each reads `d4 / d6 / d20` and `#2` appears only when it means something. `LabelFor` is
+  the one place that decides this, so the right-click menu cannot disagree with the list.
 - **Shake the view, never the board.** The dice are children of `GameManager`, so nudging
   that node teleports eight rigid bodies every frame — a hard contact each time, which
   starts collision re-rolls and can extrude a die through a wall. The throw-everything
@@ -332,7 +367,7 @@ kite is noise.
 
 **A linked pair is one entry, not two.** A percentile d10 and a plain one can be read as a
 d100: `Dice.Partner` holds the link, `Dice.PairPercent` does the arithmetic, and the die list
-merges them into a single `d100 #2+#3  34%` row drawn by the tens die. Both halves are taken
+merges them into a single `d100  34%` row drawn by the tens die. Both halves are taken
 modulo their face count first, because the face printed `0` (and `00`) is stored as ten — and
 two zeroes is the one combination that cannot mean nothing, so it means a hundred. Merging the
 row is not cosmetic: showing the pair against both dice would double it in the **Total**.
