@@ -250,6 +250,13 @@ why. Do not rebuild it without reading that first.
   extruded through: the command wins over the separation impulse. `GameManager` clamps
   positions back inside afterwards as a backstop. Steering with forces avoids the problem and
   tracks far too slowly to use — measured at 461px of lag.
+- **Shake the view, never the board.** The dice are children of `GameManager`, so nudging
+  that node teleports eight rigid bodies every frame — a hard contact each time, which
+  starts collision re-rolls and can extrude a die through a wall. The throw-everything
+  shudder sets `GetViewport().CanvasTransform` instead: what is drawn moves and the physics
+  world does not. The HUD, palette and menus are on a `CanvasLayer`, which carries its own
+  transform and stays put, so only the board shudders. Reset it to `Transform2D.Identity`
+  when the shake ends, or the board never comes back.
 - **Never move a die by assigning `GlobalPosition` while it is frozen.** That is noclip: it
   passes through walls and other dice. It is what the Shift group drag used to do.
 - **Do not zero a die's `CollisionLayer` to quiet it.** The bounds `Area2D` finds bodies by

@@ -1,4 +1,5 @@
 using Godot;
+using System;
 using System.Collections.Generic;
 
 public partial class GameManager : Node2D
@@ -19,6 +20,12 @@ public partial class GameManager : Node2D
 	/// the square root of the count, because that is how discs pack into a disc.
 	[Export] public float GatherSpread = 38f;
 
+	/// How hard and how long the board shudders when every die is thrown at once.
+	/// Small on purpose: it is a table being knocked, not an earthquake.
+	[Export] public float ShakeStrength = 5f;
+	[Export] public float ShakeDuration = 0.3f;
+	[Export] public float ShakeFrequency = 55f;
+
 	private readonly List<Dice> dice = new();
 	private readonly List<Dice> selectedDice = new();
 	private readonly HashSet<Dice> deletingDice = new();
@@ -38,6 +45,10 @@ public partial class GameManager : Node2D
 	/// The die waiting to be paired, while its possible partners stand highlighted.
 	private Dice pendingLink;
 	private bool swallowNextDieClick;
+
+	/// Seconds of shudder left, and the direction it runs along.
+	private float shakeLeft;
+	private Vector2 shakeAxis = Vector2.Right;
 	private int nextDieId = 1;
 	private bool isDragging;
 	private bool isGroupDragging;
@@ -88,7 +99,7 @@ public partial class GameManager : Node2D
 			SelectOnly(dice[0]);
 		}
 
-		SetProcess(false);          // only while a copy is riding the cursor
+		UpdateProcessing();         // idle until a copy or a shake needs the frame
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -668,7 +679,7 @@ public partial class GameManager : Node2D
 			ZIndex = 100
 		};
 		uiLayer.AddChild(copyPreview);
-		SetProcess(true);
+		UpdateProcessing();
 	}
 
 	private void CancelCopy()
@@ -676,7 +687,7 @@ public partial class GameManager : Node2D
 		pendingCopyScene = null;
 		copyPreview?.QueueFree();
 		copyPreview = null;
-		SetProcess(false);
+		UpdateProcessing();
 	}
 
 	/// <summary>
@@ -732,6 +743,8 @@ public partial class GameManager : Node2D
 		if (copyPreview != null)
 			copyPreview.Position =
 				GetViewport().GetMousePosition() - copyPreview.Size / 2f;
+		if (shakeLeft > 0f)
+			StepShake(delta);
 	}
 
 	private void DeleteDie(Dice die)
@@ -763,7 +776,52 @@ public partial class GameManager : Node2D
 		CancelDrag();
 		foreach (Dice die in dice)
 			die.Throw();
+		if (dice.Count > 0)
+			StartShake();
 	}
+
+	/// <summary>
+	/// Knock the board, as though the table had been thumped.
+	///
+	/// The *view* moves, not the board: the dice are children of this node, so shifting
+	/// it would teleport eight rigid bodies every frame — which reads as a hard contact,
+	/// starts collision re-rolls and can push a die through a wall. Setting the
+	/// viewport's canvas transform moves what is drawn and leaves the physics world
+	/// exactly where it was. The HUD, palette and menus sit on a CanvasLayer, which has
+	/// its own transform and does not follow, so only the board shudders.
+	/// </summary>
+	private void StartShake()
+	{
+		shakeLeft = ShakeDuration;
+		float angle = Random.Shared.NextSingle() * Mathf.Tau;
+		shakeAxis = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+		UpdateProcessing();
+	}
+
+	/// One decaying oscillation along a fixed direction, rather than a fresh random
+	/// offset each frame: a thump that rings down, where per-frame noise reads as the
+	/// picture being broken.
+	private void StepShake(double delta)
+	{
+		shakeLeft -= (float)delta;
+		if (shakeLeft <= 0f)
+		{
+			shakeLeft = 0f;
+			GetViewport().CanvasTransform = Transform2D.Identity;
+			UpdateProcessing();
+			return;
+		}
+
+		float remaining = shakeLeft / ShakeDuration;        // 1 at the thump, 0 at rest
+		float amplitude = ShakeStrength * remaining * remaining;
+		float phase = (ShakeDuration - shakeLeft) * ShakeFrequency;
+		GetViewport().CanvasTransform =
+			new Transform2D(0f, shakeAxis * amplitude * Mathf.Sin(phase));
+	}
+
+	/// _Process runs only when something needs it: a copy riding the cursor, or a shake
+	/// running down.
+	private void UpdateProcessing() => SetProcess(copyPreview != null || shakeLeft > 0f);
 
 	private void DeleteAllDice()
 	{
