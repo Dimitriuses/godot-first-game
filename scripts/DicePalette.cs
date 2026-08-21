@@ -292,6 +292,33 @@ public partial class DicePalette : Control
 			box.Position.Y + (box.Size.Y - nameTag.Size.Y) / 2f);
 	}
 
+	/// How big a die riding the cursor is drawn. Smaller than the 96 it used to be: it is
+	/// a label saying what is coming, not a preview of its final size.
+	public const float GhostSize = 56f;
+
+	private const float GhostGap = 12f;
+
+	/// <summary>
+	/// Where a ghost would sit if it were offset from the pointer rather than centred on
+	/// it: up and to the right, folding to the other side near an edge the way the hover
+	/// tag does.
+	///
+	/// **Currently unused, and kept on purpose.** The ghosts are centred on the cursor,
+	/// which is where they read best; this is here for the day that changes. It is not
+	/// dead code left behind by accident — do not delete it as such.
+	/// </summary>
+	public static Vector2 GhostPosition(Vector2 cursor, Vector2 size, Vector2 view)
+	{
+		float x = cursor.X + GhostGap;
+		if (x + size.X > view.X - 4f)
+			x = cursor.X - GhostGap - size.X;
+		float y = cursor.Y - GhostGap - size.Y;
+		if (y < 4f)
+			y = cursor.Y + GhostGap;
+		return new Vector2(Mathf.Clamp(x, 4f, Mathf.Max(4f, view.X - size.X - 4f)),
+			Mathf.Clamp(y, 4f, Mathf.Max(4f, view.Y - size.Y - 4f)));
+	}
+
 	/// <summary>
 	/// The die's own corner of its 128px cell, so a button can be the size of the die
 	/// rather than the size of the frame it was rendered in.
@@ -370,7 +397,7 @@ public partial class DicePalette : Control
 			Texture = draggingIcon,
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			Size = new Vector2(96, 96),
+			Size = new Vector2(GhostSize, GhostSize),
 			Modulate = new Color(1, 1, 1, 0.8f),
 			MouseFilter = MouseFilterEnum.Ignore,
 			ZIndex = 100,

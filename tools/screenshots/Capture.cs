@@ -137,6 +137,10 @@ public partial class Capture : Node
 			// the face's resting frame and reports it, with no clip to wait out and
 			// nothing random. It runs last so it clears any state the move left.
 			dice[i].PlaceOnFace(Board[i].Face);
+			// And end the arrival animation these dice started when they were spawned.
+			// Left running, the shot would catch whichever frame of it the machine
+			// happened to reach.
+			dice[i].SnapScale();
 		}
 		await Frames(4);
 

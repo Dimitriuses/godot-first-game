@@ -61,6 +61,9 @@ public partial class Dice : RigidBody2D
 	[Export] public float ThrowSpinMax = 9f;
 
 	private int themeIndex = DiceTheme.Bone;
+	private float hoverScale = 1f;
+	private float effectScale = 1f;
+	private Tween scaleTween;
 	private int currentResult = 1;
 	private int faceCount;              // 0 until first read; see FaceCount
 	private bool isHeld;
@@ -496,8 +499,102 @@ public partial class Dice : RigidBody2D
 
 	public void SetHovered(bool hovered)
 	{
-		AnimatedSprite.Scale = hovered ? Vector2.One * 1.12f : Vector2.One;
+		hoverScale = hovered ? 1.12f : 1f;
+		ApplyScale();
 		AnimatedSprite.ZIndex = hovered ? 20 : 0;
+	}
+
+	/// <summary>
+	/// The scale an arriving or departing die is drawn at, on top of whatever the hover
+	/// is doing.
+	///
+	/// Two multipliers rather than one number, because both want the same property and
+	/// neither knows about the other: pointing at a die mid-arrival used to snap it to
+	/// full size, and letting go of it snapped it back to nothing.
+	///
+	/// The sprite, never the body. Scaling a RigidBody2D scales its collision shape with
+	/// it, so a die would arrive with a collider growing out of the floor.
+	/// </summary>
+	public float EffectScale
+	{
+		get => effectScale;
+		set
+		{
+			effectScale = value;
+			ApplyScale();
+		}
+	}
+
+	private void ApplyScale() =>
+		AnimatedSprite.Scale = Vector2.One * hoverScale * effectScale;
+
+	/// How long an arrival and a departure take.
+	///
+	/// Longer than they look like they should be. Back easing is heavily front-loaded —
+	/// at a fifth of the way through, a Back-out is already two thirds of the way up —
+	/// so 0.3s read as an instant pop with the overshoot invisible.
+	private const double AppearSeconds = 0.42;
+	private const double VanishSeconds = 0.3;
+
+	/// A die arriving on the board: up from nothing, with a little overshoot at the end.
+	public void Appear(double seconds = AppearSeconds)
+	{
+		scaleTween?.Kill();
+		EffectScale = 0.02f;
+		Modulate = new Color(1f, 1f, 1f, 0f);
+		scaleTween = CreateTween().SetParallel();
+		// Back-out is the overshoot: it passes full size and comes back, which reads as
+		// the die landing rather than as a window opening.
+		scaleTween.TweenMethod(Callable.From<float>(v => EffectScale = v), 0.02f, 1f,
+			seconds).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+		// The fade finishes first, well inside the overshoot, so what is seen bouncing is
+		// a solid die and not a ghost of one.
+		scaleTween.TweenProperty(this, "modulate:a", 1f, seconds * 0.45)
+			.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+	}
+
+	/// <summary>
+	/// A die leaving: down to nothing, and then gone.
+	///
+	/// The die is already out of every list that matters by the time this is called — it
+	/// is a picture from here on, so it is frozen and made deaf to the mouse and to
+	/// contacts first. Turning ContactMonitor off rather than clearing the collision
+	/// layer is deliberate: the bounds Area2D finds bodies by layer, and clearing it
+	/// fires BodyExited and teleports the whole board back to the spawn point.
+	/// </summary>
+	public void Vanish(double seconds = VanishSeconds)
+	{
+		scaleTween?.Kill();
+		Freeze = true;
+		InputPickable = false;
+		ContactMonitor = false;
+
+		scaleTween = CreateTween().SetParallel();
+		// Back-in is the mirror of the arrival: it dips outward first, so the die gathers
+		// itself before it goes.
+		scaleTween.TweenMethod(Callable.From<float>(v => EffectScale = v), effectScale,
+			0.02f, seconds).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.In);
+		scaleTween.TweenProperty(this, "modulate:a", 0f, seconds)
+			.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
+		scaleTween.Chain().TweenCallback(Callable.From(QueueFree));
+	}
+
+	/// <summary>
+	/// Stop any arrival or departure and sit at full size.
+	///
+	/// Called by whoever needs a die to be *finished*, which in practice is the
+	/// screenshot tool: a die caught mid-bounce would make its output depend on how fast
+	/// the machine ran. Deliberately not folded into <see cref="PlaceOnFace"/>, which was
+	/// where it lived at first — that method is about which face is up, and putting this
+	/// in it meant a copy, which is placed on a face the moment it is made, never got to
+	/// animate in at all.
+	/// </summary>
+	public void SnapScale()
+	{
+		scaleTween?.Kill();
+		scaleTween = null;
+		EffectScale = 1f;
+		Modulate = Colors.White;
 	}
 
 	private void OnBodyEntered(Node body)

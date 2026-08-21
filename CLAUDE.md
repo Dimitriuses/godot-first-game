@@ -130,6 +130,21 @@ headless runs the idle loop at no predictable speed.
   and the tick is a fixed 1/60 — and then emit `body_entered` yourself in the *same frame*
   as the last move. Wait even a moment and the approach measurement decays to nothing.
 
+### Do not judge an animation by captured frames
+
+Saving a PNG of the viewport costs more wall time than the animation being sampled, so a
+strip of `Save(); await Ticks(1);` frames says nothing useful: the first capture shows the
+die at nothing and the second shows it settled, whatever the duration actually is. It looked
+for a while like a 0.42 s tween was completing in two frames.
+
+Log the value instead — `GD.Print` the property against `Time.GetTicksMsec()` on each
+process frame — and read the curve off the numbers. Capture frames only once the shape is
+already known, to see how it looks rather than to find out what it does.
+
+Sampling a value that a tween is driving is luck at the ends, too: a node that frees itself
+when its tween completes may never be observed at its final value. Assert what the check
+actually means (it shrank well past half way) rather than the exact endpoint.
+
 ### Smoke test
 
 Cheap, and catches anything that throws during startup:
@@ -282,6 +297,14 @@ why. Do not rebuild it without reading that first.
   frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
   and the collision re-roll starts a clip. Anything that repositions dice should switch
   `ContactMonitor` off first — the screenshot tool does, after this cost it determinism twice.
+- **A die is drawn about twelve pixels below its own origin.** The artwork is rendered
+  with the die high in its cell — measured, the resting frame's centre sits 12 to 15px
+  below the middle of the 128px frame — and the collider carries a matching
+  `collider_offset` so that it lines up with what is drawn. `Dice.CollisionOffset` is the
+  one place that answers "where is the die, relative to its node". **Anything that puts a
+  die at a point a player chose has to subtract it**, or the die lands low: `SpawnDie` did
+  not, so every die dropped from the palette and every copy placed by clicking sat a
+  cursor's width below where it was asked for. The bounds clamp already got this right.
 - **An offset collider moves the centre of mass.** `center_of_mass_mode` defaults to Auto,
   which derives the centre from the collision shapes — so the die's collider offset of
   `(1, 12)` made it spin about a point 12 px off its origin and wander 24 px while turning on
@@ -317,6 +340,24 @@ why. Do not rebuild it without reading that first.
   measurement — the same position delta `moveSpeed` was already taking — and is what the
   sound uses. The *re-roll* threshold beside it still reads `LinearVelocity`, deliberately:
   it was tuned against those numbers and changing it would change how the game plays.
+- **Scale the sprite, never the body.** A `RigidBody2D`'s `Scale` takes its collision
+  shape with it, so a die animating in from nothing would arrive with a collider growing
+  out of the floor. `Dice` scales `AnimatedSprite` instead — and does it through *two*
+  multipliers, `hoverScale` and `EffectScale`, because the hover and the arrival both want
+  that one property and neither knows about the other. One number meant pointing at an
+  arriving die snapped it to full size and letting go snapped it back to nothing.
+- **`SnapScale()` ends an arrival, and only its caller may decide to.** The screenshot tool
+  calls it, because a die caught mid-bounce makes `docs/screenshot.png` depend on how fast
+  the machine ran. It was briefly folded into `PlaceOnFace` instead, which looked tidier and
+  was wrong: a **copy** is placed on a face the instant it is made, so that quietly stopped
+  every copied die from animating in at all. `PlaceOnFace` is about which face is up.
+- **Back easing is heavily front-loaded, so durations have to be longer than they feel.**
+  Measured: a 0.42 s `Back.Out` is already 78% of the way up at 56 ms and full size by
+  120 ms; the overshoot peaks at 1.09 around 180 ms and takes until 420 ms to settle. At the
+  0.3 s that seemed right, the whole thing read as an instant pop with no visible overshoot
+  at all. The departure is the mirror and **grows before it shrinks** — a die a few frames
+  into leaving is *bigger* than full size, so "is it smaller yet" is the wrong question to
+  ask of it.
 - **Godot's default font has no emoji, and a glyph it cannot render draws as a blank box.**
   So an icon made of a character — a speaker, a gear, an arrow beyond the handful that do
   exist — is a button that looks broken on some machines and fine on yours. `MuteButton`

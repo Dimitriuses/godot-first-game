@@ -540,11 +540,17 @@ public partial class GameManager : Node2D
 		Dice die = scene.Instantiate<Dice>();
 		AddChild(die);
 		die.Theme = theme;
+		die.Appear();
 		Sfx.Play("spawn", 0f, 0.05f);
 		Vector2 viewportSize = GetViewportRect().Size;
-		die.GlobalPosition = new Vector2(
+		// Clamp where the die will be *seen*, then step back to the origin that puts it
+		// there. A die is drawn about twelve pixels below its own origin — the collider
+		// carries the same offset, which is what lines it up with the artwork — so
+		// dropping the origin under the pointer left every spawned die sitting low.
+		Vector2 wanted = new Vector2(
 			Mathf.Clamp(screenPosition.X, 80f, viewportSize.X - 240f),
 			Mathf.Clamp(screenPosition.Y, 90f, viewportSize.Y - 80f));
+		die.GlobalPosition = wanted - die.CollisionOffset;
 		RegisterDie(die);
 		SelectOnly(die);
 	}
@@ -721,7 +727,7 @@ public partial class GameManager : Node2D
 			Material = DiceTheme.MaterialFor(pendingCopyTheme),
 			ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 			StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-			Size = new Vector2(96, 96),
+			Size = new Vector2(DicePalette.GhostSize, DicePalette.GhostSize),
 			Modulate = new Color(1, 1, 1, 0.65f),
 			MouseFilter = Control.MouseFilterEnum.Ignore,
 			ZIndex = 100
@@ -816,7 +822,9 @@ public partial class GameManager : Node2D
 		if (activeDie == die)
 			activeDie = dice.Count > 0 ? dice[0] : null;
 		die.SetHovered(false);
-		die.QueueFree();
+		// Shrinks away and frees itself. Everything above has already taken it out of the
+		// lists, so what is left on the board is a picture finishing its exit.
+		die.Vanish();
 	}
 
 	/// <summary>

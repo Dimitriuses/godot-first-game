@@ -46,6 +46,9 @@ linked, themed — says so. All of it goes through one bus, which the speaker in
 corner — or **M** — switches off. The seventeen sounds are **synthesised, not sampled**: see
 [tools/audio-render/README.md](tools/audio-render/README.md).
 
+Dice pop into existence and shrink away when deleted, both on eased curves rather than
+plain fades.
+
 Dice come in seven colour schemes — bone, crimson, emerald, sapphire, amber, obsidian and
 ivory. Nothing is re-rendered for them and there are no extra images: a small shader reads
 each pixel's luminance and looks the colour up, so a themed die tumbles, blurs and lands
