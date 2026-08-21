@@ -65,6 +65,10 @@ public partial class GameManager : Node2D
 		DiceArea.BodyExited += OnBodyExited;
 		boardBounds = ComputeBoardBounds();
 
+		// Before the panels, so anything that makes a noise while building has somewhere
+		// to send it.
+		AddChild(new Sfx { Name = "Sfx" });
+
 		uiLayer = new CanvasLayer { Name = "GameUiLayer" };
 		AddChild(uiLayer);
 		palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
@@ -78,10 +82,14 @@ public partial class GameManager : Node2D
 		diceHud.DeleteRequested += DeleteDie;
 		diceHud.DeleteAllRequested += DeleteAllDice;
 
+		var mute = new MuteButton { Name = "MuteButton" };
+		uiLayer.AddChild(mute);
+		mute.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
 		diceMenu = new DiceMenu { Name = "DiceMenu" };
 		uiLayer.AddChild(diceMenu);
 		diceMenu.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		diceMenu.RollRequested += die => die?.Roll(restart: true);
+		diceMenu.RollRequested += RollOne;
 		diceMenu.CopyRequested += BeginCopy;
 		diceMenu.DeleteRequested += DeleteDie;
 		diceMenu.LinkRequested += BeginLink;
@@ -264,7 +272,7 @@ public partial class GameManager : Node2D
 			{
 				if (key.Keycode == DiceMenu.RollKey)
 				{
-					subject.Roll(restart: true);
+					RollOne(subject);
 					diceMenu.Close();
 					GetViewport().SetInputAsHandled();
 					return;
@@ -485,18 +493,29 @@ public partial class GameManager : Node2D
 		}
 	}
 
+	/// How fast a release has to be before it counts as a throw rather than a put-down.
+	private const float ThrowSoundSpeed = 220f;
+
 	private void ReleaseDraggedDice()
 	{
 		if (isGroupDragging)
 		{
+			// The fastest of them decides, and the sound plays once for the throw rather
+			// than once per die: a handful of them together is one gesture, and eight
+			// copies of the same clip landing on one frame is just a louder clip.
+			float fastest = 0f;
 			foreach (Dice die in selectedDice)
 			{
 				// It is already moving at the steer velocity; do not overwrite that with
 				// the raw cursor speed, which ignores whatever the die was pressed against.
 				die.Freeze = false;
 				die.LinearVelocity = die.LinearVelocity.LimitLength(MaxDragSpeed);
-				die.ReleaseFromDrag(die.LinearVelocity.Length());
+				float speed = die.LinearVelocity.Length();
+				fastest = Mathf.Max(fastest, speed);
+				die.ReleaseFromDrag(speed);
 			}
+			if (fastest > ThrowSoundSpeed)
+				Sfx.Play("die_throw", 0f, 0.08f);
 		}
 		else if (draggedDie != null)
 		{
@@ -504,6 +523,9 @@ public partial class GameManager : Node2D
 			float releaseSpeed = draggedDie.LinearVelocity.Length();
 			EndSingleDrag();
 			draggedDie.ReleaseFromDrag(releaseSpeed);
+			// A fling makes a noise; setting a die down does not.
+			if (releaseSpeed > ThrowSoundSpeed)
+				Sfx.Play("die_throw", 0f, 0.08f);
 		}
 
 		ClearDragState();
@@ -518,6 +540,7 @@ public partial class GameManager : Node2D
 		Dice die = scene.Instantiate<Dice>();
 		AddChild(die);
 		die.Theme = theme;
+		Sfx.Play("spawn", 0f, 0.05f);
 		Vector2 viewportSize = GetViewportRect().Size;
 		die.GlobalPosition = new Vector2(
 			Mathf.Clamp(screenPosition.X, 80f, viewportSize.X - 240f),
@@ -552,6 +575,8 @@ public partial class GameManager : Node2D
 	public void OnSpawnButton()
 	{
 		CancelDrag();
+		if (dice.Count > 0)
+			Sfx.Play("respawn");
 		for (int i = 0; i < dice.Count; i++)
 			ResetDie(dice[i], spawnPosition + new Vector2((i % 4) * 54f, (i / 4) * 54f));
 	}
@@ -642,6 +667,7 @@ public partial class GameManager : Node2D
 		Unlink(b);
 		a.Partner = b;
 		b.Partner = a;
+		Sfx.Play("link");
 		diceHud.UpdateValue(a, a.Value);        // redraw the list as one row
 	}
 
@@ -651,6 +677,8 @@ public partial class GameManager : Node2D
 			return;
 		Dice partner = die.Partner;
 		die.Partner = null;
+		if (partner != null)
+			Sfx.Play("unlink");
 		if (partner != null && IsInstanceValid(partner))
 		{
 			partner.Partner = null;
@@ -780,6 +808,7 @@ public partial class GameManager : Node2D
 		if (pendingLink == die)
 			CancelLink();
 
+		Sfx.Play("delete", 0f, 0.05f);
 		deletingDice.Add(die);
 		dice.Remove(die);
 		selectedDice.Remove(die);
@@ -788,6 +817,21 @@ public partial class GameManager : Node2D
 			activeDie = dice.Count > 0 ? dice[0] : null;
 		die.SetHovered(false);
 		die.QueueFree();
+	}
+
+	/// <summary>
+	/// Roll one die where it stands — the menu's first item, and the R key.
+	///
+	/// The only two ways a roll is asked for rather than caused. A collision re-roll and a
+	/// throw both start one too, and neither goes through here: they already make a noise
+	/// of their own, and a rattle on top of a clack is just a louder clack.
+	/// </summary>
+	private void RollOne(Dice die)
+	{
+		if (die == null || !IsInstanceValid(die))
+			return;
+		die.Roll(restart: true);
+		Sfx.Play("die_roll", 0f, 0.06f);
 	}
 
 	/// <summary>
@@ -810,6 +854,7 @@ public partial class GameManager : Node2D
 		if (die == null || !IsInstanceValid(die))
 			return;
 		die.Theme = theme;
+		Sfx.Play("theme");
 		// Both halves of a d100 together: they are read as one die, so a pair wearing two
 		// colours would be a stranger thing than the pair not matching the board.
 		if (die.Partner != null && IsInstanceValid(die.Partner))
@@ -824,7 +869,10 @@ public partial class GameManager : Node2D
 		foreach (Dice die in dice)
 			die.Throw();
 		if (dice.Count > 0)
+		{
+			Sfx.ThrowAll();
 			StartShake();
+		}
 	}
 
 	/// <summary>

@@ -67,6 +67,7 @@ public partial class Dice : RigidBody2D
 	private bool isRolling;
 	private int spinLevel;              // 0 resting, 1 idle0, 2 idle1
 	private float moveSpeed;
+	private Vector2 lastVelocity;
 	private Vector2 lastPosition;
 	private ulong lastCollisionRollMs;
 
@@ -106,6 +107,14 @@ public partial class Dice : RigidBody2D
 		if (AnimatedSprite.Material != wanted)
 			AnimatedSprite.Material = wanted;
 	}
+
+	/// How fast the die was travelling over the previous physics step, as a vector.
+	///
+	/// Not the same thing as <c>LinearVelocity</c> when a collision is being reported:
+	/// `body_entered` is emitted after the step has already resolved the contact, so by
+	/// then the die has been slowed by the very impact being described. A die arriving at
+	/// a wall at 95 px/s reports 34. This is what it was doing on the way in.
+	public Vector2 ApproachVelocity => lastVelocity;
 
 	public bool IsHeld => isHeld;
 	public bool IsRolling => isRolling;
@@ -240,7 +249,8 @@ public partial class Dice : RigidBody2D
 		// physics carries it, while the Shift group drag freezes the body and moves
 		// it by hand — and a frozen body reports no velocity at all.
 		Vector2 position = GlobalPosition;
-		moveSpeed = delta > 0 ? (position - lastPosition).Length() / (float)delta : 0f;
+		lastVelocity = delta > 0 ? (position - lastPosition) / (float)delta : Vector2.Zero;
+		moveSpeed = lastVelocity.Length();
 		lastPosition = position;
 
 		if (isHeld)
@@ -438,6 +448,9 @@ public partial class Dice : RigidBody2D
 	{
 		isRolling = false;
 		ShowResting();
+		// Only here, not in PlaceOnFace: that one also reports a result, but it is a
+		// put-down rather than a landing and the screenshot tool leans on it.
+		Sfx.Play("die_land", 0f, 0.06f);
 		EmitSignal(SignalName.DiceRolled, currentResult);
 	}
 
@@ -489,7 +502,21 @@ public partial class Dice : RigidBody2D
 
 	private void OnBodyEntered(Node body)
 	{
-		if (body is not Dice other)
+		// Relative speed against another die, plain speed against a wall. Both are worth
+		// a click; only a die is worth a re-roll, which is why the sound is settled first
+		// and the early return kept below it.
+		Dice other = body as Dice;
+
+		// Two different speeds on purpose. The sound wants how hard the die arrived, which
+		// is the approach velocity; the re-roll threshold below has always been measured
+		// against post-impact LinearVelocity and is left reading exactly what it read
+		// before, because changing it would change how the game plays.
+		if (!isHeld)
+			Sfx.DieHit(other != null
+				? (ApproachVelocity - other.ApproachVelocity).Length()
+				: ApproachVelocity.Length());
+
+		if (other == null)
 			return;
 
 		float impactSpeed = (LinearVelocity - other.LinearVelocity).Length();

@@ -163,6 +163,10 @@ public partial class DiceMenu : Control
 	/// menu that opens half outside the window cannot be finished.
 	private void Show(Vector2 at)
 	{
+		// On opening only. A sound on closing as well would fire on every click that
+		// happens to dismiss the panel, which is most of them.
+		if (!panel.Visible)
+			Sfx.Play("ui_open");
 		panel.Visible = true;
 		panel.ResetSize();          // a PanelContainer outside a container keeps its size
 		Vector2 view = GetViewportRect().Size;

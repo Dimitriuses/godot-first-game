@@ -38,6 +38,13 @@ detection and `AnimatedSprite2D`.
 | **× in a die-list row** | remove that die; it appears when the row is pointed at |
 | **Delete All** | remove every die from the board |
 | **"Respawn" button** | arrange all dice near the centre and kill their velocity |
+| **Speaker button**, top right, or **M** | turn the sound off and on |
+
+Dice clack off each other and off the walls, in proportion to how hard they hit; the board
+answers the space bar, and every action that changes something — a die spawned, deleted,
+linked, themed — says so. All of it goes through one bus, which the speaker in the top-right
+corner — or **M** — switches off. The seventeen sounds are **synthesised, not sampled**: see
+[tools/audio-render/README.md](tools/audio-render/README.md).
 
 Dice come in seven colour schemes — bone, crimson, emerald, sapphire, amber, obsidian and
 ivory. Nothing is re-rendered for them and there are no extra images: a small shader reads
@@ -114,8 +121,11 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             DiceHud.cs       live die list, total and deletion controls
             DiceMenu.cs      the right-click menu, for a die, the board or the palette
             DiceTheme.cs     the colour schemes, and the materials that apply them
+            Sfx.cs           the voice pool, and how often a sound may repeat
+            MuteButton.cs    the speaker in the corner, icon drawn rather than typed
             Player.cs        board-piece stub, unused (board game dropped)
 shaders/    dice_theme.gdshader  recolours a die without re-rendering it
+assets/     audio/           seventeen synthesised sound effects
 assets/     dice/            die animation frames, a folder per die:
                              d4 d6 d6n d8 d10 d10p d12 d20
                              (see docs/ASSETS.md)

@@ -360,6 +360,7 @@ public partial class DicePalette : Control
 			|| mouseButton.ButtonIndex != MouseButton.Left || !mouseButton.Pressed)
 			return;
 
+		Sfx.Play("ui_click");
 		isDraggingIcon = true;
 		draggingScene = scene;
 		draggingIcon = icon;
@@ -383,6 +384,8 @@ public partial class DicePalette : Control
 
 	public void SetDrawerOpen(bool open, bool animate)
 	{
+		if (animate && open != isOpen)
+			Sfx.Play(open ? "ui_open" : "ui_close");
 		isOpen = open;
 		float panelLeft = open ? DrawerLeft : -DrawerWidth;
 		float panelRight = open ? DrawerLeft + DrawerWidth : 0f;

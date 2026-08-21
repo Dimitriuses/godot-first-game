@@ -667,6 +667,10 @@ public partial class DiceHud : Control
 
 	public void SetOpen(bool open, bool animate)
 	{
+		// Only when the player did it. The silent form is how the screenshot tool and the
+		// harnesses arrange the panel, and neither wants a noise for it.
+		if (animate && open != isOpen)
+			Sfx.Play(open ? "ui_open" : "ui_close");
 		isOpen = open;
 		float top = open ? DrawerTop : 0f;
 		float bottom = open ? DrawerBottom : DrawerTop - DrawerBottom;

@@ -107,6 +107,29 @@ private async Task Ticks(int n)
 }
 ```
 
+### Audio is testable headless, once it has been imported
+
+The dummy driver runs `AudioStreamPlayer` properly: `Playing` goes true on `Play()` and back
+to false when the clip ends, and `Stream.ResourcePath` says which clip a voice holds — which
+is enough to assert what the game is making a noise about. What it needs first is
+`godot --headless --path . --import`, because a `.wav` with no `.import` sidecar fails to
+load with *"No loader found for resource"* and every sound silently does nothing.
+
+Rate limits are in milliseconds, so wait on `Time.GetTicksMsec()` rather than on frames —
+headless runs the idle loop at no predictable speed.
+
+**Three physics traps, all of which cost a run apiece here:**
+
+- **A sleeping `RigidBody2D` ignores an assignment to `LinearVelocity`.** Set
+  `Sleeping = false` first or the die simply sits there.
+- **A frozen body reports a *stale* `LinearVelocity`, not zero.** It stops being updated
+  rather than being cleared, so it reads whatever it was doing when it froze.
+- **Do not try to stage a collision by throwing a die at something.** It drifts during the
+  frames it takes to settle and misses about half the time. Freeze the die, move it by hand
+  a fixed number of pixels per tick — `freeze_mode` is Kinematic, so the solver adds nothing
+  and the tick is a fixed 1/60 — and then emit `body_entered` yourself in the *same frame*
+  as the last move. Wait even a moment and the approach measurement decays to nothing.
+
 ### Smoke test
 
 Cheap, and catches anything that throws during startup:
@@ -176,12 +199,19 @@ what found the original bug.
 
 ### Things that are hard to test this way
 
-Mouse input *on the dice*. The tests drove `Dice.StartDragging()` / `ReleaseFromDrag()`
-directly rather than synthesising clicks, so the `InputEvent` → `PinJoint2D` path in
-`GameManager` is not covered. Click and fling by hand once before calling a drag change
-done. Same for hovering a die: `DiceHud.SetDieHovered` is called directly, and what a
-harness *can* check is that the signal is wired —
-`die.GetSignalConnectionList("mouse_entered").Count == 1`.
+Mouse input *on the dice*, **headless**. Pushed events are not enough: the drag steers from
+`GetGlobalMousePosition()` in `_PhysicsProcess`, and physics picking answers to the real
+pointer, so headless both read the origin for ever and a synthesised fling never moves
+anything. That is not a rule being broken — a per-frame steer legitimately wants the live
+cursor, the same exemption the palette's drag ghost has.
+
+**Windowed, though, a drag is drivable.** `Input.WarpMouse` works with a real window, so
+warping the cursor along a path and pushing the button events around it drives the whole
+`InputEvent` → `PinJoint2D` path for real, Shift group drags included. Run the harness
+without `--headless` and warp in the helper that moves the pointer; do both there — the warp
+is what picking and the steering see, the pushed event is what the GUI sees — and the same
+harness then works either way. It costs a few seconds and the operator's cursor, which is
+the deal `tools/screenshots/Capture.cs` already makes.
 
 **Hovering a `Control`, though, is fully testable headless.** `Input.WarpMouse` does
 nothing, but `GetViewport().PushInput(new InputEventMouseMotion { Position = p })` moves the
@@ -279,6 +309,30 @@ why. Do not rebuild it without reading that first.
   `TEXTURE` is invisible inside a user function at all, and `TEXTURE_PIXEL_SIZE` exists
   only in `vertex()` — use `textureSize(TEXTURE, 0)`. And `return` is forbidden in an entry
   function, so no early-outs in `fragment()`.
+- **`body_entered` reports the velocity *after* the impact, not before.** The signal is
+  emitted once the physics step has resolved the contact, so the die has already been
+  slowed by the very collision being described: one arriving at a wall doing 95 px/s
+  reports 34. Loudness read off `LinearVelocity` there put every ordinary contact below the
+  audible threshold and the board was silent. `Dice.ApproachVelocity` is the pre-step
+  measurement — the same position delta `moveSpeed` was already taking — and is what the
+  sound uses. The *re-roll* threshold beside it still reads `LinearVelocity`, deliberately:
+  it was tuned against those numbers and changing it would change how the game plays.
+- **Godot's default font has no emoji, and a glyph it cannot render draws as a blank box.**
+  So an icon made of a character — a speaker, a gear, an arrow beyond the handful that do
+  exist — is a button that looks broken on some machines and fine on yours. `MuteButton`
+  draws its speaker with `DrawRect`, `DrawColoredPolygon` and `DrawArc` in a 24-unit square
+  scaled to the button, which renders identically everywhere and does not depend on a font
+  at all. The arrows already in use (`◀ ▶ ×`) are safe; anything past that is not.
+- **Muting mutes the bus, not the calls.** `AudioServer.SetBusMute` leaves the voice pool
+  allocating and recycling exactly as it does when audible, so unmuting cannot land in a
+  state the mixer has not been keeping up to date, and a sound already sounding stops
+  rather than finishing under a mute that was just asked for. It also means a test can
+  still see which clip is on a voice while the game is silent.
+- **A sound is generated, never sampled.** `tools/audio-render/make_sounds.py` synthesises
+  all sixteen and is the only place their character lives; `scripts/Sfx.cs` holds only
+  policy — how loud, how often, how many at once. Two rules that are load-bearing: relative
+  levels are baked into the WAVs so nothing is re-balanced per call site, and every sound
+  shares one bus so there is a single place to put a volume control.
 - **`idle1` is not greyscale, and it is the only clip that is not.** The fast spin is
   rendered through a sweeping rainbow — `set_palette_gradient` in
   `tools/dice-render/render.py`, HSV saturation 0.55 — where everything else measures

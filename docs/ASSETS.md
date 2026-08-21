@@ -1,9 +1,22 @@
 # Asset provenance
 
-The MIT licence in `LICENSE` covers the **code and project files**, and the die frames under
-`assets/dice/`, which were rendered for this repository from a CC0 model. The rest of the
+The MIT licence in `LICENSE` covers the **code and project files**, the die frames under
+`assets/dice/`, which were rendered for this repository from a CC0 model, and the sound
+effects under `assets/audio/`, which were synthesised for it outright. The rest of the
 artwork came from elsewhere and keeps its own terms. This file records what each asset is,
 where it came from, and how that was established — by measurement where possible.
+
+## `assets/audio/` — generated here, MIT
+
+Seventeen WAVs, about 310 KB. Not recorded and not downloaded: **synthesised from nothing** by
+[`tools/audio-render/make_sounds.py`](../tools/audio-render/README.md), which is the only
+place their character is decided. A die clack is modal synthesis — a noise transient plus
+five decaying inharmonic partials — and the UI sounds are short shaped tones.
+
+There is no third party in this and so nothing to establish: no sample pack, no library, no
+attribution owed. That was most of the reason for doing it this way. Two runs of the tool
+produce byte-identical files, so the committed WAVs can be checked against their source at
+any time by re-running it.
 
 ## `assets/kenney-boardgame/` — CC0, no restrictions
 
