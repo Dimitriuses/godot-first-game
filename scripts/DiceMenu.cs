@@ -2,12 +2,17 @@ using Godot;
 using System;
 
 /// <summary>
-/// The panel that opens on a right-click, acting on one die.
+/// The panel that opens on a right-click, on a die or on the board behind it.
+///
+/// One panel with two sets of items rather than two menus: the fiddly parts — folding
+/// back at the screen edge, not closing on the press that is about to choose an item,
+/// telling the board's clicks from its own — are the same either way, and having them
+/// once means they cannot drift apart.
 ///
 /// It owns no behaviour: choosing an item raises an event and closes, and
-/// <see cref="GameManager"/> does the work. That keeps the die's rules in one place
-/// rather than splitting them between the board and a menu, and it is why the same
-/// actions can be driven from the keyboard without going through here at all.
+/// <see cref="GameManager"/> does the work. That keeps the rules in one place rather
+/// than splitting them between the board and a menu, and it is why the same actions can
+/// be driven from the keyboard without going through here at all.
 /// </summary>
 public partial class DiceMenu : Control
 {
@@ -16,6 +21,10 @@ public partial class DiceMenu : Control
 	public event Action<Dice> DeleteRequested;
 	public event Action<Dice> LinkRequested;
 	public event Action<Dice> UnlinkRequested;
+
+	public event Action ThrowAllRequested;
+	public event Action RespawnRequested;
+	public event Action DeleteAllRequested;
 
 	/// What the Link item can offer for the die the menu is opening on. The board knows
 	/// which dice are out and what they are; the menu only draws the answer.
@@ -38,6 +47,11 @@ public partial class DiceMenu : Control
 	private Label nameLabel;
 	private Label valueLabel;
 	private Button linkItem;
+	private VBoxContainer dieItems;
+	private VBoxContainer boardItems;
+	private Button throwAllItem;
+	private Button respawnItem;
+	private Button deleteAllItem;
 	private Dice target;
 	private bool linkedNow;     // whether linkItem currently means "Unlink"
 
@@ -58,6 +72,8 @@ public partial class DiceMenu : Control
 	/// would be worse than none.
 	public override void _Process(double delta)
 	{
+		// Only ever running for the die menu; the board one has no value to keep up to
+		// date and switches processing off.
 		Dice die = Target;
 		if (die == null)
 			Close();
@@ -74,18 +90,48 @@ public partial class DiceMenu : Control
 		nameLabel.Text = die.DisplayName;
 		valueLabel.Text = die.Value.ToString();
 		SetLinkage(linkage);
+		dieItems.Visible = true;
+		boardItems.Visible = false;
+		Show(at);
+		SetProcess(true);       // the value can change while the menu is up
+	}
+
+	/// <summary>
+	/// The other menu: a right-click on the board rather than on a die.
+	///
+	/// The same three things the buttons and the space bar already do, gathered where
+	/// the pointer is. `count` is only for the header — everything is greyed out when
+	/// there is nothing to do it to.
+	/// </summary>
+	public void OpenBoard(Vector2 at, int count)
+	{
+		target = null;
+		nameLabel.Text = "BOARD";
+		valueLabel.Text = count.ToString();
+		dieItems.Visible = false;
+		boardItems.Visible = true;
+		throwAllItem.Disabled = count == 0;
+		respawnItem.Disabled = count == 0;
+		deleteAllItem.Disabled = count == 0;
+		Show(at);
+		SetProcess(false);      // nothing here changes on its own
+	}
+
+	/// Put the panel at the pointer, folding back rather than hanging off the edge — a
+	/// menu that opens half outside the window cannot be finished.
+	private void Show(Vector2 at)
+	{
 		panel.Visible = true;
 		panel.ResetSize();          // a PanelContainer outside a container keeps its size
-
-		// Open down and right of the pointer, and fold back rather than hang off the
-		// edge — a menu that opens half outside the window cannot be finished.
 		Vector2 view = GetViewportRect().Size;
 		Vector2 size = panel.Size;
 		panel.Position = new Vector2(
 			Mathf.Max(4f, at.X + size.X > view.X - 4f ? at.X - size.X : at.X),
 			Mathf.Max(4f, at.Y + size.Y > view.Y - 4f ? at.Y - size.Y : at.Y));
-		SetProcess(true);
 	}
+
+	/// Whether either menu is up. `Target` is the die one only.
+	public bool IsOpen => panel != null && panel.Visible;
 
 	public void Close()
 	{
@@ -136,22 +182,42 @@ public partial class DiceMenu : Control
 		content.AddChild(head);
 		content.AddChild(new HSeparator());
 
-		AddItem(content, "Roll", $"({(char)RollKey})", "Roll this die where it stands",
+		// Two sets of items, one shown at a time. Separate containers rather than one
+		// list with things hidden, so neither has to know the other exists.
+		dieItems = new VBoxContainer { Name = "DieItems" };
+		dieItems.AddThemeConstantOverride("separation", 4);
+		content.AddChild(dieItems);
+
+		AddItem(dieItems, "Roll", $"({(char)RollKey})", "Roll this die where it stands",
 			() => RollRequested?.Invoke(target));
-		AddItem(content, "Theme", "", "Colour schemes — not built yet", null);
-		AddItem(content, "Copy", $"({(char)CopyKey})",
+		AddItem(dieItems, "Theme", "", "Colour schemes — not built yet", null);
+		AddItem(dieItems, "Copy", $"({(char)CopyKey})",
 			"Take a copy, then click where to put it — hold Shift to keep stamping",
 			() => CopyRequested?.Invoke(target));
-		linkItem = AddItem(content, "Link", "", "", () =>
+		linkItem = AddItem(dieItems, "Link", "", "", () =>
 		{
 			if (linkedNow)
 				UnlinkRequested?.Invoke(target);
 			else
 				LinkRequested?.Invoke(target);
 		});
-		content.AddChild(new HSeparator());
-		AddItem(content, "Delete", "", "Remove this die from the board",
+		dieItems.AddChild(new HSeparator());
+		AddItem(dieItems, "Delete", "", "Remove this die from the board",
 			() => DeleteRequested?.Invoke(target));
+
+		boardItems = new VBoxContainer { Name = "BoardItems", Visible = false };
+		boardItems.AddThemeConstantOverride("separation", 4);
+		content.AddChild(boardItems);
+
+		throwAllItem = AddItem(boardItems, "Throw all", "(Space)",
+			"Scatter every die across the board and roll it",
+			() => ThrowAllRequested?.Invoke());
+		respawnItem = AddItem(boardItems, "Respawn", "",
+			"Gather every die back to the middle and stop it",
+			() => RespawnRequested?.Invoke());
+		boardItems.AddChild(new HSeparator());
+		deleteAllItem = AddItem(boardItems, "Delete all", "",
+			"Clear the board", () => DeleteAllRequested?.Invoke());
 	}
 
 	/// <summary>

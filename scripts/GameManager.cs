@@ -74,6 +74,9 @@ public partial class GameManager : Node2D
 		diceMenu.DeleteRequested += DeleteDie;
 		diceMenu.LinkRequested += BeginLink;
 		diceMenu.UnlinkRequested += Unlink;
+		diceMenu.ThrowAllRequested += ThrowAllDice;
+		diceMenu.RespawnRequested += OnSpawnButton;
+		diceMenu.DeleteAllRequested += DeleteAllDice;
 
 		foreach (Node child in GetChildren())
 			if (child is Dice die)
@@ -225,9 +228,7 @@ public partial class GameManager : Node2D
 		{
 			if (key.Keycode == Key.Space)
 			{
-				CancelDrag();
-				foreach (Dice die in dice)
-					die.Throw();        // scatter them as well as animating
+				ThrowAllDice();
 				GetViewport().SetInputAsHandled();
 				return;
 			}
@@ -290,9 +291,23 @@ public partial class GameManager : Node2D
 
 		if (mouseButton.ButtonIndex == MouseButton.Right)
 		{
+			// A right-click while something is pending means "not that", and nothing more.
+			bool wasPending = pendingCopyScene != null || pendingLink != null;
 			CancelCopy();
 			CancelLink();
 			diceMenu.Close();
+			if (wasPending)
+				return;
+
+			// Both menus open from here rather than from the die's own click handler,
+			// which reports after this has already run and decided.
+			Dice under = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
+			if (under != null)
+				diceMenu.Open(under, point, LinkageOf(under));
+			else
+				diceMenu.OpenBoard(point, dice.Count);
+			swallowNextDieClick = true;
+			GetViewport().SetInputAsHandled();
 			return;
 		}
 
@@ -383,20 +398,11 @@ public partial class GameManager : Node2D
 			|| !mouseButton.Pressed)
 			return;
 
-		if (mouseButton.ButtonIndex == MouseButton.Right)
-		{
-			CancelCopy();       // a right-click means "not that", including mid-copy
-			CancelLink();
-			diceMenu.Open(clickedDie, GetViewport().GetMousePosition(),
-				LinkageOf(clickedDie));
-			GetViewport().SetInputAsHandled();
-			return;
-		}
-
 		if (mouseButton.ButtonIndex != MouseButton.Left)
 			return;
 
-		// _Input already dealt with this click as the second half of a pairing.
+		// _Input already dealt with this click — as a menu, or as the second half of a
+		// pairing. Either way the die has nothing left to do with it.
 		if (swallowNextDieClick)
 		{
 			swallowNextDieClick = false;
@@ -748,6 +754,15 @@ public partial class GameManager : Node2D
 			activeDie = dice.Count > 0 ? dice[0] : null;
 		die.SetHovered(false);
 		die.QueueFree();
+	}
+
+	/// Scatter every die across the board and roll it — the space bar, and the board
+	/// menu's first item.
+	private void ThrowAllDice()
+	{
+		CancelDrag();
+		foreach (Dice die in dice)
+			die.Throw();
 	}
 
 	private void DeleteAllDice()

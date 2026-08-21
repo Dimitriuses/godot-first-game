@@ -20,6 +20,7 @@ detection and `AnimatedSprite2D`.
 | **Drag a die from the palette** | add another die to the board |
 | **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
 | **Right-click a die** | open its menu: what it is, what it shows, and Roll / Theme / Copy / Link / Delete |
+| **Right-click the board** | open the board menu: how many dice are out, and Throw all / Respawn / Delete all |
 | **Link**, on either d10 | pick the other one; the pair then reads as one **d100**, 1–100% — and thereafter picks up, moves and throws as one |
 | **R** with a die under the cursor | roll that one die where it stands |
 | **C** with a die under the cursor | take a copy; the next left-click puts it down |
@@ -97,7 +98,7 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Dice.cs          roll result + face animations
             DicePalette.cs   right-side drag-to-spawn dice menu
             DiceHud.cs       sorted die values, total and deletion controls
-            DiceMenu.cs      the right-click menu for one die
+            DiceMenu.cs      the right-click menu, for a die or the board
             Player.cs        board-piece stub, unused (board game dropped)
 assets/     dice/            die animation frames, a folder per die:
                              d4 d6 d6n d8 d10 d10p d12 d20

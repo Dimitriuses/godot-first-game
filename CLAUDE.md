@@ -134,6 +134,9 @@ consequences, all of which have bitten:
   it, placing a copy drops a die behind whichever panel was clicked.
 - A press on the die menu must be left alone entirely: closing the panel on the press means
   the button never sees the release and no item ever fires.
+- **Both right-click menus open from `_Input`, not from the die.** Which one to show
+  depends on whether a die is under the point, and that has to be asked of the physics
+  world there and then; letting the die answer means deciding twice, in the wrong order.
 - **A click on a die reaches `_Input` before `Dice.InputEvent`.** Anything that has to know
   whether the click landed on a die must ask the physics world itself (`DieAt`), because
   waiting for the die to report is waiting for a decision `_Input` has already made. Linking
