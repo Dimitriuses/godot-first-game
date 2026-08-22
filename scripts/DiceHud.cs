@@ -76,11 +76,16 @@ public partial class DiceHud : Control
 	private Dice hoveredDie;
 	private Tween drawerTween;
 	private bool isOpen;
+
+	/// On a touchscreen there is no hovering, so anything that only appears under the
+	/// pointer never appears at all. The delete cross stays out on those.
+	private bool touchUi;
 	private int nextSeq = 1;
 
 	public override void _Ready()
 	{
 		MouseFilter = MouseFilterEnum.Ignore;
+		touchUi = DisplayServer.IsTouchscreenAvailable();
 		BuildInterface();
 		SetOpen(false, false);
 		Refresh();
@@ -492,7 +497,8 @@ public partial class DiceHud : Control
 
 			entry.Panel.AddThemeStyleboxOverride("panel",
 				rolling ? rowRolling : entry.Hovered ? rowHover : rowRest);
-			entry.Remove.Modulate = new Color(1, 1, 1, entry.Hovered ? 1f : 0f);
+			entry.Remove.Modulate =
+				new Color(1, 1, 1, entry.Hovered || touchUi ? 1f : 0f);
 		}
 
 		// Rolling dice are left out rather than counted at their old value, so the total

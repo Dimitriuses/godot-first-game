@@ -15,9 +15,6 @@ public partial class MuteButton : Control
 	/// to this control and nothing else needs to know about it.
 	public const Key MuteKey = Key.M;
 
-	private const float ButtonSize = 40f;
-	private const float Margin = 8f;
-
 	private Button button;
 	private Control icon;
 
@@ -25,22 +22,8 @@ public partial class MuteButton : Control
 	{
 		MouseFilter = MouseFilterEnum.Ignore;
 
-		button = new Button
-		{
-			Name = "Mute",
-			FocusMode = FocusModeEnum.None,
-			MouseFilter = MouseFilterEnum.Stop
-		};
-		button.SetAnchorsPreset(LayoutPreset.TopRight);
-		button.OffsetLeft = -ButtonSize - Margin;
-		button.OffsetRight = -Margin;
-		button.OffsetTop = Margin;
-		button.OffsetBottom = Margin + ButtonSize;
-		button.AddThemeStyleboxOverride("normal", Style("202536e8", "77819b"));
-		button.AddThemeStyleboxOverride("hover", Style("2d3450f0", "aab3c8"));
-		button.AddThemeStyleboxOverride("pressed", Style("171b28f0", "77819b"));
+		button = UiSkin.CornerButton(this, "Mute", 0);
 		button.Pressed += Toggle;
-		AddChild(button);
 
 		icon = new Control { Name = "Icon", MouseFilter = MouseFilterEnum.Ignore };
 		icon.SetAnchorsPreset(LayoutPreset.FullRect);
@@ -79,18 +62,6 @@ public partial class MuteButton : Control
 		icon.QueueRedraw();
 	}
 
-	private static StyleBoxFlat Style(string bg, string border)
-	{
-		var style = new StyleBoxFlat
-		{
-			BgColor = new Color(bg),
-			BorderColor = new Color(border)
-		};
-		style.SetBorderWidthAll(2);
-		style.SetCornerRadiusAll(9);
-		return style;
-	}
-
 	/// <summary>
 	/// A speaker, and either two waves coming out of it or a cross where they were.
 	///
@@ -101,8 +72,7 @@ public partial class MuteButton : Control
 	{
 		bool muted = Sfx.Muted;
 		Color tint = muted ? new Color("8b93a8") : new Color("e6e8f2");
-		float unit = icon.Size.X / 24f;
-		Vector2 origin = new(0f, (icon.Size.Y - 24f * unit) / 2f);
+		(float unit, Vector2 origin) = UiSkin.IconFrame(icon);
 		Vector2 P(float x, float y) => origin + new Vector2(x, y) * unit;
 
 		// The block, and the cone opening to the right of it.

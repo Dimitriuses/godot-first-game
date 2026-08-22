@@ -45,6 +45,15 @@ public partial class GameManager : Node2D
 	private DiceMenu diceMenu;
 	private DicePalette palette;
 	private MuteButton muteButton;
+	private GroupDragButton groupDragButton;
+
+	/// Whether a drag takes every die, as holding Shift does. A toggle rather than a
+	/// modifier because a touchscreen has no modifiers to hold.
+	private bool groupDrag;
+
+	/// Shaking the device throws the board, where there is a device to shake. Zero on a
+	/// desktop and in a browser, so Feed is never reached and this costs nothing there.
+	private readonly ShakeGesture shakeGesture = new();
 	private CanvasLayer uiLayer;
 
 	/// A copy waiting to be put down: the die type taken, the face it was showing, and
@@ -57,6 +66,10 @@ public partial class GameManager : Node2D
 	/// The die waiting to be paired, while its possible partners stand highlighted.
 	private Dice pendingLink;
 	private bool swallowNextDieClick;
+
+	/// Set when a double tap has just opened a menu, so the emulated mouse press that
+	/// Godot generates from the same tap does not also act on it.
+	private bool swallowNextPress;
 
 	/// Seconds of shudder left, and the direction it runs along.
 	private float shakeLeft;
@@ -107,6 +120,11 @@ public partial class GameManager : Node2D
 		MuteButton mute = muteButton;
 		uiLayer.AddChild(mute);
 		mute.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
+		groupDragButton = new GroupDragButton { Name = "GroupDragButton" };
+		uiLayer.AddChild(groupDragButton);
+		groupDragButton.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		groupDragButton.Toggled += value => groupDrag = value;
 
 		diceMenu = new DiceMenu { Name = "DiceMenu" };
 		uiLayer.AddChild(diceMenu);
@@ -160,6 +178,14 @@ public partial class GameManager : Node2D
 			nextSaveCheckMs = Time.GetTicksMsec() + SaveCheckMs;
 			SaveIfChanged();
 		}
+
+		// A phone being shaken is the space bar. Godot returns zero from the accelerometer
+		// on any platform without one, which is every platform this currently ships to —
+		// see the note in ShakeGesture about the browser.
+		Vector3 acceleration = Input.GetAccelerometer();
+		if (acceleration != Vector3.Zero && shakeGesture.Feed(acceleration, delta)
+			&& dice.Count > 0)
+			ThrowAllDice();
 
 		Vector2 mouse = GetGlobalMousePosition();
 
@@ -284,6 +310,18 @@ public partial class GameManager : Node2D
 
 	public override void _Input(InputEvent @event)
 	{
+		// A double tap is what a screen has instead of a second mouse button. Godot
+		// reports the touch itself and, with emulate_mouse_from_touch on, a mouse event
+		// alongside it — this reads the touch, and the flag stops the mouse copy from
+		// acting on the same tap.
+		if (@event is InputEventScreenTouch { Pressed: true, DoubleTap: true } tap)
+		{
+			OpenContextMenu(tap.Position);
+			swallowNextPress = true;
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+
 		if (@event is InputEventKey shiftKey && shiftKey.Keycode == Key.Shift
 			&& shiftKey.Pressed && !shiftKey.Echo)
 		{
@@ -345,6 +383,17 @@ public partial class GameManager : Node2D
 			return;
 		}
 
+		// The emulated press that follows a double tap. Godot turns touches into mouse
+		// events as well as reporting them, so without this the tap that opened the menu
+		// goes on to grab whatever it was over.
+		if (swallowNextPress && mouseButton.Pressed)
+		{
+			swallowNextPress = false;
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+		swallowNextPress = false;
+
 		// The event's own position, not the current cursor: they are the same thing in
 		// the game and not in a harness, and the click should mean where it was made.
 		Vector2 point = mouseButton.Position;
@@ -359,36 +408,7 @@ public partial class GameManager : Node2D
 
 		if (mouseButton.ButtonIndex == MouseButton.Right)
 		{
-			// A right-click while something is pending means "not that", and nothing more.
-			bool wasPending = pendingCopyScene != null || pendingLink != null;
-			CancelCopy();
-			CancelLink();
-			diceMenu.Close();
-			if (wasPending)
-				return;
-
-			// A right-click in the palette is about the kind of die, not about any die
-			// on the board, so it has to be asked of the GUI before the physics world:
-			// the pointer is over a Control, and DieAt would find nothing and open the
-			// board menu behind the panel that was clicked.
-			int slot = palette.SlotOf(GetViewport().GuiGetHoveredControl());
-			if (slot >= 0)
-			{
-				diceMenu.OpenPalette(slot, palette.SlotName(slot), point,
-					palette.SlotTheme(slot));
-				GetViewport().SetInputAsHandled();
-				return;
-			}
-
-			// Both menus open from here rather than from the die's own click handler,
-			// which reports after this has already run and decided.
-			Dice under = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
-			if (under != null)
-				diceMenu.Open(under, point, LinkageOf(under),
-					diceHud.LabelFor(under));
-			else
-				diceMenu.OpenBoard(point, dice.Count);
-			swallowNextDieClick = true;
+			OpenContextMenu(point);
 			GetViewport().SetInputAsHandled();
 			return;
 		}
@@ -423,6 +443,43 @@ public partial class GameManager : Node2D
 
 		if (PlaceCopy(point, mouseButton.ShiftPressed))
 			GetViewport().SetInputAsHandled();
+	}
+
+	/// <summary>
+	/// The menu a right-click asks for — or a double-tap, which is the same request made
+	/// with one finger on a screen that has no second button.
+	///
+	/// Which of the three menus it is depends on what is under the point, and that has to
+	/// be settled here: `_Input` runs before the GUI and before physics picking, so
+	/// waiting for either to report is waiting for a decision this has already made.
+	/// </summary>
+	private void OpenContextMenu(Vector2 point)
+	{
+		// Asked for while something is pending means "not that", and nothing more.
+		bool wasPending = pendingCopyScene != null || pendingLink != null;
+		CancelCopy();
+		CancelLink();
+		diceMenu.Close();
+		if (wasPending)
+			return;
+
+		// The palette is about the kind of die, not about any die on the board, so it has
+		// to be asked of the GUI before the physics world: the pointer is over a Control,
+		// and DieAt would find nothing and open the board menu behind the panel.
+		int slot = palette.SlotOf(GetViewport().GuiGetHoveredControl());
+		if (slot >= 0)
+		{
+			diceMenu.OpenPalette(slot, palette.SlotName(slot), point,
+				palette.SlotTheme(slot));
+			return;
+		}
+
+		Dice under = DieAt(GetViewport().GetCanvasTransform().AffineInverse() * point);
+		if (under != null)
+			diceMenu.Open(under, point, LinkageOf(under), diceHud.LabelFor(under));
+		else
+			diceMenu.OpenBoard(point, dice.Count);
+		swallowNextDieClick = true;
 	}
 
 	/// The die under a point on the board, or null. Asked of the physics world rather
@@ -500,7 +557,10 @@ public partial class GameManager : Node2D
 			return;
 		}
 
-		if (Input.IsKeyPressed(Key.Shift))
+		// The event's own modifier, not the keyboard's current state — the rule the copy
+		// above already follows, and the only one a synthesised click can satisfy. The
+		// toggle sits beside it because it means exactly the same thing.
+		if (mouseButton.ShiftPressed || groupDrag)
 		{
 			SelectAll();
 			activeDie = clickedDie;
@@ -919,6 +979,7 @@ public partial class GameManager : Node2D
 			["settings"] = new Godot.Collections.Dictionary
 			{
 				["muted"] = Sfx.Muted,
+				["group_drag"] = groupDrag,
 				["palette_open"] = palette.IsOpen,
 				["list_open"] = diceHud.IsOpen,
 				["palette_themes"] = themes,
@@ -963,6 +1024,11 @@ public partial class GameManager : Node2D
 				// The button was built before this ran, so it is still drawn for whatever
 				// the sound was before the save was read.
 				muteButton?.Refresh();
+			}
+			if (settings.TryGetValue("group_drag", out Variant grouped))
+			{
+				groupDrag = grouped.AsBool();
+				groupDragButton?.SetOn(groupDrag);
 			}
 			if (settings.TryGetValue("palette_themes", out Variant themes)
 				&& themes.VariantType == Variant.Type.Array)

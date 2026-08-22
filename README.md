@@ -20,6 +20,7 @@ detection and `AnimatedSprite2D`.
 | **Drag a die from the palette** | add another die to the board |
 | **Hover a palette die** | name it — the two pairs that share a shape are told apart here |
 | **Right-click a palette die** | choose the colour that kind of die comes out in from now on |
+| **Double-tap** (touch) | the same as a right-click: opens whichever menu is under your finger |
 | **Right-click a die** | open its menu: what it is, what it shows, Roll / Copy / Link / Delete, and seven colour schemes |
 | **Right-click the board** | open the board menu: how many dice are out, and Throw all / Respawn / Delete all |
 | **Link**, on either d10 | pick the other one; the pair then reads as one **d100**, 1–100% — and thereafter picks up, moves and throws as one |
@@ -31,6 +32,8 @@ detection and `AnimatedSprite2D`.
 | **Move a held die about** | spin it up: gentle movement plays `idle0`, sharp movement `idle1`. Once spinning it keeps tumbling in your hand until you let go |
 | **Release the left button** | a die you spun rolls; a die you never agitated just sits where you dropped it |
 | **Hold Shift, then drag a die** | select and throw every die together |
+| **Four-squares button**, top right | the same thing as a permanent mode — the only way to reach it on a touchscreen |
+| **Shake the device** | throw every die, where there is an accelerometer to read (see below) |
 | **Space** | throw every die — they scatter across the board as well as rolling, including any still mid-roll, and the board takes a knock |
 | **Hover a die on the board** | a small tag by the cursor names it and the number it is showing |
 | **Total button** | open or close the die list, below the palette |
@@ -48,6 +51,15 @@ corner — or **M** — switches off. The seventeen sounds are **synthesised, no
 
 Dice pop into existence and shrink away when deleted, both on eased curves rather than
 plain fades.
+
+The window scales: the board is drawn at a fixed 1152×648 and stretched to whatever it is
+given, keeping its aspect, so the whole table is visible at any size rather than the window
+revealing more empty world as it grows. Touch works too — Godot turns taps into clicks, and
+a **double-tap** stands in for the right-click that a touchscreen has no way to make. The
+Shift group drag has no modifier key to hold on a screen, so it is also a toggle button in
+the corner. Shaking the device throws the board on any export that reports an
+accelerometer; a browser does not, which is noted in
+[ROADMAP](ROADMAP.md) item 9 as work for the web port rather than something missing here.
 
 The board and the settings **save themselves** — where every die is standing, which face it
 shows, its colour, which dice are linked, the palette's colours, the panels, and whether the

@@ -785,6 +785,23 @@ So `tools/web-port/` gets a rewriter that reads `scenes/` and emits the GDScript
 - Leave the 606 atlas regions untouched. `tools/dice-render/validate.py` already proves that,
   and should run against the rewritten scene as part of CI.
 
+### 9b-touch. Shake-to-throw needs the browser, not Godot
+
+`ShakeGesture` already decides what a shake is, and `GameManager` feeds it from
+`Input.GetAccelerometer()`. That works on an Android or iOS export and returns zero
+everywhere else, including in a browser: **Godot's web platform does not implement the
+sensor APIs.** The GDScript port therefore has one thing to add that the C# tree cannot
+carry over —
+
+- read the DOM's `devicemotion` event through `JavaScriptBridge` and call `Feed`;
+- ask for it only on a gesture, because **iOS 13+ requires
+  `DeviceMotionEvent.requestPermission()` from inside a user interaction** and refuses
+  otherwise;
+- the page must be served over HTTPS, which GitHub Pages is.
+
+Everything else about the gesture — the threshold, the cooldown, ignoring a tilt — is
+already written and already tested, and needs no second copy.
+
 ### 9c. The pipeline
 
 A GitHub Actions workflow on `ubuntu-latest`:
