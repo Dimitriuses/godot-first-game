@@ -390,9 +390,12 @@ game; they are the things that stand between it and a Pages URL, listed here so 
   reason item 9 is a hand-written GDScript port rather than a build setting.
 - **47 MB of dice artwork would go into the download.** `export_filter="all_resources"`
   ships everything under `assets/`, and `assets/dice/` alone is 47 MB across eight dice.
-  That is fine for a desktop binary and not fine for a browser. ROADMAP 8 costs out the
-  options — fewer dice, shorter clips, or a shared-prefix animation redesign — and none of
-  them has been done. **Decide this before deploying, not after.**
+  That is fine for a desktop binary and not fine for a browser. The options are now
+  **measured** rather than estimated — see [tools/clip-lab/](../tools/clip-lab/README.md).
+  Cutting every clip from 91 frames to 61 saves 30% and needs no redesign; the shared-prefix
+  redesign saves 27% at a handoff the artwork can actually hide, and only shortening the
+  tails as well reaches 50%. None has been done. **Decide this before deploying, not
+  after** — it is the one item here that changes what gets built rather than how it ships.
 - **The save has never been run in a browser.** `user://` maps to IndexedDB in a web export,
   which is why the save was written with plain `FileAccess` and no JavaScript, but that path
   has only been exercised on a desktop. The flush happens when the file is closed.

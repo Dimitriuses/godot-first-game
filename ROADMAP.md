@@ -231,10 +231,20 @@ fast enough to hide it — so the handoff lands around frame 40 and the tails ru
 
 #### What the options actually cost
 
+> **Superseded by measurement, August 2026.** These were estimated before the pack was
+> rendered. [tools/clip-lab/](../tools/clip-lab/README.md) now measures the same options
+> against the committed sheets, and the shared-prefix figure below is optimistic: it assumes
+> a handoff around frame 45–50, and the artwork stops hiding the face by frame 42. At a
+> handoff the pictures support (frame 30) it is **35.3 MB / 27%**, which is *worse* than
+> simply cutting the clips to 61 frames. The redesign only pays once the tails are shortened
+> as well, at which point it is 24.2 MB / 50%. The clip lab also confirms the prefix cannot
+> be shared without re-rendering — the faces are separate trajectories, and splicing them
+> jumps visibly.
+
 | | size | note |
 |---|---|---|
-| all 76 faces, as the pipeline stands | 43.8 MB | |
-| all 76, shared prefix + slewing tails | 27.5 MB | 37% saved, needs the animation redesign above |
+| all 76 faces, as the pipeline stands | 43.8 MB | actually 48.6 MB as shipped |
+| all 76, shared prefix + slewing tails | 27.5 MB | 37% saved, needs the animation redesign above — **measured at 27% for a safe handoff** |
 | all 76, clips cut from 91 to 61 frames | 30.5 MB | 30% saved, no redesign; loses a third of the tumble |
 | **d6 + d20** | **14.7 MB** | d6 already shipped |
 | d6 + d20 + d4 | 17.2 MB | |
