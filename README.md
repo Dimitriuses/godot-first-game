@@ -186,8 +186,9 @@ The short version. Still open:
   be flushed. Silent and harmless, still unguarded.
 - **Nothing is committed as a test.** Every change is verified with a throwaway headless
   harness that is then deleted; the recipe is in [CLAUDE.md](CLAUDE.md).
-- **A browser build is not ready** — C# cannot be web-exported at all, and 47 MB of dice
-  artwork would go into the download. KNOWNISSUES 9 lists what stands in the way.
+- **A browser build is not ready** — C# cannot be web-exported at all. The artwork's
+  share of the download is down to 16 MB from 33, by importing the sheets as lossy WebP.
+  KNOWNISSUES 9 lists what still stands in the way.
 
 Fixed, and worth knowing were once true: the die used to draw its number from
 `System.Random`, roll itself unprompted, tunnel through the walls above 8,000 px/s, and be

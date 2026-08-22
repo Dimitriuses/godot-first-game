@@ -148,9 +148,134 @@ the screenshot tool. The work is: run `decimate.py` for all eight dice, move the
 (`tools/dice-render/make_scene.py`). `tools/dice-render/validate.py` checks a scene against
 the sheets on disk and should be run afterwards.
 
+## VRAM compression — measured, August 2026, and it is the wrong trade
+
+The idea was that ETC2/ASTC would cut texture memory fourfold. It does. It also multiplies
+the download by four and a half, and the memory it saves is the problem that lazy loading
+already solved.
+
+One sheet (`d6/1_sprites.png`, 1280×1280, 520 KB) imported four ways, then measured:
+
+| import mode | on disk | in memory | GPU format | PSNR |
+|---|---|---|---|---|
+| lossless (today) | 357 KB | 8.74 MB | RGBA8 | — |
+| **lossy WebP** | **134 KB** | 8.74 MB | RGBA8 | 33.0 dB |
+| VRAM compressed | 1,600 KB ×4 variants | **2.18 MB** | DXT5 | 30.4 dB |
+| Basis Universal | 1,600 KB | **2.18 MB** | BPTC | 36.2 dB |
+
+Extrapolated to the 92 sheets:
+
+| | download | memory |
+|---|---|---|
+| lossless (today) | 33.4 MB | 727 MB |
+| **lossy WebP** | **12.5 MB** | 727 MB |
+| VRAM compressed | 149.5 MB | 182 MB |
+| Basis Universal | 149.5 MB | 182 MB |
+
+### Three things worth knowing
+
+**The `.ctex` is already smaller than the PNG.** Lossless import re-encodes to 357 KB from a
+520 KB source, so the real download today is **33 MB, not 48.6** — the figure quoted
+everywhere else in this repository is the size of the *sources*, which do not ship.
+
+**VRAM compression emits every format variant.** The import produced four files totalling
+6.4 MB for one sheet: S3TC and BPTC for desktop, ETC2 and ASTC for mobile. An export picks
+what its target needs, but a *web* export may need both desktop and mobile families, because
+the same page runs on both.
+
+**DXT5 is the worst option on this artwork specifically.** 30.4 dB, visible blotching across
+the flat faces at 3× (`out/vram_quality.png`), and — the part that matters here — it damages
+**alpha**, by up to 31 levels. This animation is mostly soft alpha: the motion blur *is* the
+artwork. Basis/BPTC is near-indistinguishable at 36.2 dB and is the good version of the same
+idea, but carries the same download.
+
+### The recommendation
+
+**Do not use VRAM compression.** It buys memory at four and a half times the download, and
+memory stopped being the constraint when the pack went lazy — startup is 79 MB now and grows
+only with the dice actually thrown.
+
+**Use lossy WebP instead** if the download matters. That was the conclusion, it was then
+applied to the whole pack, and the next section is what it actually did.
+
+The one thing not measured: the desktop importer chose DXT5 and BPTC. A web or mobile target
+would use ETC2 or ASTC, which could not be tested here. ETC2 is broadly DXT5-class and ASTC
+is better, so the ranking is unlikely to change, but confirm before relying on it.
+
 ## If this is taken further
 
 The re-render needs `tools/dice-render/` to emit, per die, one face-agnostic tumble for
 frames 0–29 and then 76 tails that each *begin* from the pose that tumble ends on. That is
 the "slewing tails" ROADMAP 8 describes, and the slew has to finish before the face becomes
 readable — roughly frames 30–42 — or the die will visibly snap into its answer.
+
+## Lossy WebP — applied to the pack, August 2026
+
+`compress/mode=1` in the `.import` files. No re-render, no change to the sheets on disk, and
+nothing in `scripts/` knows about it. Measured over all 92 sheets by summing the `.ctex`
+files each `.import` points at:
+
+| | download | startup memory |
+|---|---|---|
+| lossless, as it was | 32.62 MB | 79.1 MB |
+| **lossy, as shipped** | **16.29 MB** | 79.1 MB |
+
+**Half the download for nothing.** Memory does not move because the GPU format is `Rgba8`
+either way — WebP is a container decision, not a texture one, which is exactly what makes it
+different from VRAM compression.
+
+### Quality does not fix the red pip, and that is why the d6 is exempt
+
+At 12× the first all-lossy build showed real artefacts on the d6's pip: a dark halo, green
+bleed above it, a mottled interior. Three qualities on `d6/5_sprites.png`, measured against
+the lossless *decode* over visible pixels only:
+
+| quality | KB | PSNR | mean error | pip mean | pip max |
+|---|---|---|---|---|---|
+| 0.70 | 141 | 33.5 dB | 3.90 | 18.79 | 64 |
+| 0.85 | 163 | 36.8 dB | 2.64 | 17.63 | 53 |
+| 0.95 | 218 | 41.3 dB | 1.43 | 16.66 | 52 |
+| lossless | 362 | — | — | — | — |
+
+The frame as a whole improves steadily — 33.5 dB to 41.3 dB — while **the pip barely moves**:
+18.79 to 16.66 across a 55% size increase. Quality controls DCT precision; the pip's damage is
+**chroma subsampling**, which WebP does regardless. There is no setting that fixes it.
+
+So the pack is split rather than tuned: **quality 0.85 for the 84 sheets outside
+`assets/dice/d6/`, and lossless for the eight inside it.** The d6 is the only die carrying a
+small saturated feature. The exemption costs 3.4 MB against an all-lossy build and is a
+targeted answer to a measured problem rather than a global setting chosen to survive its worst
+case.
+
+`idle1` is saturated too — it is the rainbow spin — but a large smooth sweep is what chroma
+subsampling handles best, and it is unreadable by design. It is the small sharp spot on
+neutral that is the worst case, not saturation as such.
+
+### What it looks like in the game
+
+`docs/screenshot.png` regenerated and diffed against the lossless build, per die:
+
+| die | differing pixels | worst |
+|---|---|---|
+| d6 (kept lossless) | **0** | **0** |
+| d4 | 521 | 48 |
+| d20 | 581 | 41 |
+| d10% | 559 | 39 |
+| d8 | 443 | 37 |
+
+2,301 pixels differ visibly across the whole 1152×648 frame, worst 48 of a possible 765 — down
+from 5,281 and 125 at quality 0.70. The d6 being exactly zero is the check that the exemption
+is actually in force. `out/lossy_ingame.png` has the 4× crops and an 8×-amplified difference.
+
+### Re-rendering a die resets this
+
+Godot writes a fresh `.import` with the default `compress/mode=0` for a PNG it has not seen
+before, so **a newly added die imports lossless and silently costs the pack a megabyte or
+two**. Overwriting an existing sheet — which is what `pipeline.py --install` does — keeps the
+setting, so only new dice are affected. Check with:
+
+```sh
+grep -L "compress/mode=1" assets/dice/*/*_sprites.png.import
+```
+
+Anything listed that is not under `d6/` has been reset.

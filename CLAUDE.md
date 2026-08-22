@@ -298,6 +298,16 @@ why. Do not rebuild it without reading that first.
 - **`Play(name)` only rewinds when it changes clip.** Calling it for the animation already
   loaded resumes mid-way. `Dice.Roll()` therefore plays first and sets `Frame = 0` after.
 - **Setting `Frame` clears `FrameProgress`,** so set them in that order.
+- **The dice sheets import as lossy WebP, except the d6's.** `compress/mode=1` at quality
+  0.85 in the `.import` files halves the download — 32.62 MB to 16.29 MB — for no memory
+  cost, because the GPU format is `Rgba8` either way. The pipped d6 is exempt: WebP
+  subsamples chroma whatever the quality, and its red pip is the pack's one small saturated
+  feature, so raising quality does not fix it (measured — the pip's error barely moves from
+  0.70 to 0.95 while the frame as a whole gains 8 dB). **A newly rendered die imports
+  lossless by default**, so after adding one, check
+  `grep -L "compress/mode=1" assets/dice/*/*_sprites.png.import` and expect only `d6/`.
+  Overwriting an existing sheet keeps its setting, so `pipeline.py --install` is safe.
+  Full numbers in [tools/clip-lab/README.md](tools/clip-lab/README.md).
 - **Every die scene is generated — do not hand-edit them.** `dice.tscn` (the pipped d6),
   `d20.tscn`, `d4.tscn`, `d6n.tscn`, `d8.tscn`, `d10.tscn`, `d10p.tscn` and `d12.tscn` each
   hold one `AtlasTexture` per frame:

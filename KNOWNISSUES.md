@@ -397,10 +397,23 @@ game; they are the things that stand between it and a Pages URL, listed here so 
   alone is 47 MB across eight dice.
   That is fine for a desktop binary and not fine for a browser. The options are now
   **measured** rather than estimated — see [tools/clip-lab/](../tools/clip-lab/README.md).
-  Cutting every clip from 91 frames to 61 saves 30% and needs no redesign; the shared-prefix
-  redesign saves 27% at a handoff the artwork can actually hide, and only shortening the
-  tails as well reaches 50%. None has been done. **Decide this before deploying, not
-  after** — it is the one item here that changes what gets built rather than how it ships.
+  The 47 MB is the size of the *sources*, which do not ship: Godot's import re-encodes
+  them, and what a build actually carried was **32.62 MB**.
+
+  **The lossy WebP import is now applied**, which is the largest of the measured options
+  and the only one that needs no re-render: 32.62 MB → **16.29 MB, half the download**, for
+  no memory cost at all (startup is 79 MB either way — the GPU format is `Rgba8` in both
+  cases). The 84 sheets outside `assets/dice/d6/` are `compress/mode=1` at quality 0.85;
+  the pipped d6 stays lossless, because WebP subsamples chroma whatever the quality and its
+  red pip is the one small saturated feature in the pack. Measured on the README
+  screenshot: the d6 is pixel-identical to the lossless build and no other die differs by
+  more than 48 of 765.
+
+  Still open, and both needing work in `tools/dice-render/`: cutting every clip from 91
+  frames to 61 saves a further third, and the shared-prefix redesign saves 27% at a handoff
+  the artwork can hide. **VRAM compression was measured and rejected** — it cuts memory
+  fourfold but multiplies the download by four and a half, and memory stopped being the
+  constraint when the pack went lazy.
 - **The save has never been run in a browser.** `user://` maps to IndexedDB in a web export,
   which is why the save was written with plain `FileAccess` and no JavaScript, but that path
   has only been exercised on a desktop. The flush happens when the file is closed.
