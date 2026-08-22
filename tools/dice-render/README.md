@@ -196,7 +196,14 @@ python tools/dice-render/make_icons.py --write
 ```
 
 That writes `assets/dice/icons.png` and `assets/dice/pack.json`, and the manifest is what
-the game reads — there is nothing to edit in `scenes/game.tscn`. Putting die scenes in an
+the game reads — there is nothing to edit in `scenes/game.tscn`.
+
+`pack.json` carries more than the icon's region. `offset` is where the die's art lands
+relative to the point it was dropped on — the art's centre in its frame, *minus* the
+collider offset the die is placed by — and `scale` is how much the art was resized to fit
+its 64px cell. Both exist for the loading placeholder: while a die's scene loads, its icon
+stands in for it, and it can only line up pixel for pixel if it knows those two numbers.
+Neither can be read from the die at that moment, because the die is what is still loading. Putting die scenes in an
 exported array is what made the game load all 47 MB of sheets at startup; see CLAUDE.md.
 Nothing in the game code changes: `Dice.cs` counts a die's faces off its own clips, and the
 palette derives each entry's label and icon from the die itself.

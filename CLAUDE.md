@@ -426,6 +426,31 @@ why. Do not rebuild it without reading that first.
   die scene in an exported property, and never instantiate one to ask it a question** —
   that was how the palette used to build its buttons, and it was the whole 727 MB. It
   draws from a 50 KB icon sheet now.
+- **A die's first load is hidden behind its own arrival animation.** A cold `GD.Load`
+  blocks for 188ms (d4) to 672ms (d20) — a freeze at the exact moment the player drops a
+  die. So `SpawnDie(path, ...)` starts `ResourceLoader.LoadThreadedRequest` and puts the
+  palette's **icon** down instead, playing the same Back-out curve `Dice.Appear` uses. The
+  real die replaces it once **both** the load and the animation have finished; waiting for
+  both is what makes the swap invisible, because by then the placeholder is sitting still
+  at full size showing the same artwork. Measured: **zero differing pixels** across the
+  frame the swap happens on. Threaded loading costs nothing on the main thread — the
+  d20's 521ms spread over 32 frames with a worst frame of 17.6ms.
+
+  Two things the placeholder has to get right, both of which are in `pack.json` because
+  the die's own scene is by definition not loaded yet: the **offset** (the art's centre
+  relative to the drop point — icon offset *minus* the collider offset, and forgetting the
+  second half puts the ghost 13px low) and the **scale** (icons were resized to a common
+  64px cell, by 0.91 for the d4 up to 1.08 for the numbered d6, so the placeholder draws
+  at the reciprocal).
+
+  **Unverified on the web**: a single-threaded build may not thread this at all, in which
+  case the stall stays and only the immediate feedback is gained. Worth checking in a
+  browser when item 9 exists.
+- **A tool that arranges a board must spawn from a `PackedScene`, not by slot.** The slot
+  overload loads in the background, so how far it had got when the shot was taken decides
+  what the shot contains. `tools/screenshots/Capture.cs` loads the scene itself and uses
+  the synchronous overload; without that `docs/screenshot.png` came out different on every
+  run, which is exactly the failure the tool exists to prevent.
 - **Scale the sprite, never the body.** A `RigidBody2D`'s `Scale` takes its collision
   shape with it, so a die animating in from nothing would arrive with a collider growing
   out of the floor. `Dice` scales `AnimatedSprite` instead — and does it through *two*

@@ -559,8 +559,12 @@ public partial class Dice : RigidBody2D
 	/// Longer than they look like they should be. Back easing is heavily front-loaded —
 	/// at a fifth of the way through, a Back-out is already two thirds of the way up —
 	/// so 0.3s read as an instant pop with the overshoot invisible.
-	private const double AppearSeconds = 0.42;
+	public const double AppearSeconds = 0.42;
 	private const double VanishSeconds = 0.3;
+
+	/// The scale an arrival starts from. Not zero: a zero-scaled sprite has no size for
+	/// the tween to work back from.
+	public const float AppearFrom = 0.02f;
 
 	/// A die arriving on the board: up from nothing, with a little overshoot at the end.
 	public void Appear(double seconds = AppearSeconds)

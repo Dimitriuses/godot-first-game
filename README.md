@@ -61,6 +61,11 @@ the corner. Shaking the device throws the board on any export that reports an
 accelerometer; a browser does not, which is noted in
 [ROADMAP](ROADMAP.md) item 9 as work for the web port rather than something missing here.
 
+A die you have not used before takes a moment to load — up to two thirds of a second for
+the d20. You should never see it: the palette's icon is put down at once and plays the
+arrival animation, and the real die takes over when it is ready, at the same size in the
+same place.
+
 The board and the settings **save themselves** — where every die is standing, which face it
 shows, its colour, which dice are linked, the palette's colours, the panels, and whether the
 sound is off. Close the game and reopen it and the table is as you left it. It writes to

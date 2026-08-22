@@ -97,7 +97,13 @@ public partial class Capture : Node
 			if (k >= game.Pack.Count)
 				GD.PushWarning($"Board entry {i} wants die {k}; only "
 					+ $"{game.Pack.Count} are in the pack");
-			game.SpawnDie(Mathf.Min(k, game.Pack.Count - 1), Board[i].Pos);
+			// Load the scene here and spawn from it, rather than asking for it by slot.
+			// The slot route loads in the background and stands the palette's icon in
+			// meanwhile, which is right for a player and wrong for this: the shot would
+			// then depend on whether the load had finished, and stopped being
+			// reproducible the moment it was introduced.
+			string path = game.Pack[Mathf.Min(k, game.Pack.Count - 1)].Scene;
+			game.SpawnDie(GD.Load<PackedScene>(path), Board[i].Pos);
 		}
 		await Frames(4);
 

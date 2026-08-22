@@ -24,9 +24,37 @@ public partial class GameManager : Node2D
 	/// One entry per die in the pack, in palette order.
 	public readonly List<(string Scene, string Name, Rect2 Icon)> Pack = new();
 
+	/// Where each die's art sits relative to its origin, and how much its icon was
+	/// resized to fit the sheet. Parallel to Pack; used only by the loading placeholder.
+	private readonly List<Vector2> packOffsets = new();
+	private readonly List<float> packScales = new();
+
 	/// Scenes already loaded, kept so a second d6 costs nothing. Godot caches resources
 	/// itself; this only saves the repeated path lookup.
 	private readonly Dictionary<string, PackedScene> loadedScenes = new();
+
+	/// <summary>
+	/// A die that has been asked for but whose scene is still loading.
+	///
+	/// The first d20 of a session takes about half a second to load — measured at 672ms
+	/// blocking, 521ms threaded — and a die that takes half a second to turn up after
+	/// the player drops it feels broken. So the palette's icon stands in: it is already
+	/// in memory, it is the same artwork, and it plays the same arrival animation. The
+	/// real die replaces it once both the load and the animation have finished, which
+	/// makes the swap invisible — by then the placeholder is sitting still at full size,
+	/// showing exactly what the die will show.
+	/// </summary>
+	private sealed class PendingSpawn
+	{
+		public string Path;
+		public Vector2 At;
+		public int Theme;
+		public Sprite2D Ghost;
+		public double Elapsed;
+	}
+
+	private readonly List<PendingSpawn> pendingSpawns = new();
+	private Texture2D iconSheet;
 
 	/// Fastest a dragged die is steered or released at, px/s. Without a bound, a flick
 	/// hands the solver an impulse it has to fight, which is how dice used to come out
@@ -197,6 +225,9 @@ public partial class GameManager : Node2D
 			nextSaveCheckMs = Time.GetTicksMsec() + SaveCheckMs;
 			SaveIfChanged();
 		}
+
+		if (pendingSpawns.Count > 0)
+			StepPendingSpawns(delta);
 
 		// A phone being shaken is the space bar. Godot returns zero from the accelerometer
 		// on any platform without one, which is every platform this currently ships to —
@@ -664,8 +695,119 @@ public partial class GameManager : Node2D
 	/// only one that keeps the pack lazy.
 	/// </summary>
 	public void SpawnDie(string scenePath, Vector2 screenPosition,
-		int theme = DiceTheme.Bone) =>
-		SpawnDie(SceneAtPath(scenePath), screenPosition, theme);
+		int theme = DiceTheme.Bone)
+	{
+		// Already in memory: nothing to wait for, so put it down the usual way.
+		if (loadedScenes.ContainsKey(scenePath))
+		{
+			SpawnDie(SceneAtPath(scenePath), screenPosition, theme);
+			return;
+		}
+		if (!Pack.Exists(entry => entry.Scene == scenePath))
+			return;
+		BeginPendingSpawn(scenePath, screenPosition, theme);
+	}
+
+	/// <summary>
+	/// Start the die's scene loading and stand its icon in the meantime.
+	///
+	/// The icon is positioned by the manifest's offset and drawn at the reciprocal of
+	/// its scale, because the icons were resized to a common cell and the dice are not
+	/// the same size in frame. Get either wrong and the die jumps when it arrives.
+	/// </summary>
+	private void BeginPendingSpawn(string scenePath, Vector2 at, int theme)
+	{
+		ResourceLoader.LoadThreadedRequest(scenePath);
+
+		Vector2 wanted = ClampSpawn(at);
+		var pending = new PendingSpawn { Path = scenePath, At = wanted, Theme = theme };
+		(string _, string _, Rect2 icon) = Pack.Find(e => e.Scene == scenePath);
+		Vector2 offset = Vector2.Zero;
+		float scale = 1f;
+		int index = Pack.FindIndex(e => e.Scene == scenePath);
+		if (index >= 0)
+		{
+			offset = packOffsets[index];
+			scale = packScales[index];
+		}
+
+		iconSheet ??= GD.Load<Texture2D>("res://assets/dice/icons.png");
+		pending.Ghost = new Sprite2D
+		{
+			Name = "Arriving",
+			Texture = iconSheet == null ? null
+				: new AtlasTexture { Atlas = iconSheet, Region = icon },
+			// The icon cell is 64px of transparent border around cropped art, so the
+			// offset lands the art where the die's own art will be.
+			GlobalPosition = wanted + offset,
+			Scale = Vector2.One * (Dice.AppearFrom / Mathf.Max(0.001f, scale)),
+			Modulate = new Color(1f, 1f, 1f, 0f),
+			Material = DiceTheme.MaterialFor(theme)
+		};
+		AddChild(pending.Ghost);
+
+		// The same curve and duration Dice.Appear uses, so the handover is a continuation
+		// rather than a second animation.
+		float full = 1f / Mathf.Max(0.001f, scale);
+		Tween tween = pending.Ghost.CreateTween().SetParallel();
+		tween.TweenProperty(pending.Ghost, "scale", Vector2.One * full,
+				Dice.AppearSeconds)
+			.SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+		tween.TweenProperty(pending.Ghost, "modulate:a", 1f, Dice.AppearSeconds * 0.45)
+			.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+
+		Sfx.Play("spawn", 0f, 0.05f);
+		pendingSpawns.Add(pending);
+	}
+
+	/// Poll the loads in flight. A die appears once its scene is ready *and* the arrival
+	/// animation has run its course — waiting for both is what makes the swap invisible,
+	/// because the placeholder is then sitting still at full size.
+	private void StepPendingSpawns(double delta)
+	{
+		for (int i = pendingSpawns.Count - 1; i >= 0; i--)
+		{
+			PendingSpawn pending = pendingSpawns[i];
+			pending.Elapsed += delta;
+
+			var status = ResourceLoader.LoadThreadedGetStatus(pending.Path);
+			if (status == ResourceLoader.ThreadLoadStatus.InProgress
+				|| pending.Elapsed < Dice.AppearSeconds)
+				continue;
+
+			pendingSpawns.RemoveAt(i);
+			if (IsInstanceValid(pending.Ghost))
+				pending.Ghost.QueueFree();
+			if (status != ResourceLoader.ThreadLoadStatus.Loaded)
+			{
+				GD.PushWarning($"could not load {pending.Path}");
+				continue;
+			}
+
+			var scene = ResourceLoader.LoadThreadedGet(pending.Path) as PackedScene;
+			if (scene == null)
+				continue;
+			loadedScenes[pending.Path] = scene;
+			// Silent and unanimated: the placeholder already made the noise and played
+			// the arrival.
+			SpawnDie(scene, pending.At, pending.Theme, animate: false, quiet: true);
+		}
+	}
+
+	/// <summary>
+	/// Where a die dropped at this point should be seen.
+	///
+	/// Clamped in terms of the *drawn* die, not its origin: a die is drawn about twelve
+	/// pixels below its own origin, so clamping the origin left every spawn sitting low.
+	/// The caller subtracts the collider offset to get the origin.
+	/// </summary>
+	private Vector2 ClampSpawn(Vector2 screenPosition)
+	{
+		Vector2 view = GetViewportRect().Size;
+		return new Vector2(
+			Mathf.Clamp(screenPosition.X, 80f, view.X - 240f),
+			Mathf.Clamp(screenPosition.Y, 90f, view.Y - 80f));
+	}
 
 	/// The die at this place in the pack, by palette order.
 	public void SpawnDie(int slot, Vector2 screenPosition,
@@ -676,7 +818,7 @@ public partial class GameManager : Node2D
 	}
 
 	public void SpawnDie(PackedScene scene, Vector2 screenPosition,
-		int theme = DiceTheme.Bone)
+		int theme = DiceTheme.Bone, bool animate = true, bool quiet = false)
 	{
 		if (scene == null)
 			return;
@@ -684,17 +826,11 @@ public partial class GameManager : Node2D
 		Dice die = scene.Instantiate<Dice>();
 		AddChild(die);
 		die.Theme = theme;
-		die.Appear();
-		Sfx.Play("spawn", 0f, 0.05f);
-		Vector2 viewportSize = GetViewportRect().Size;
-		// Clamp where the die will be *seen*, then step back to the origin that puts it
-		// there. A die is drawn about twelve pixels below its own origin — the collider
-		// carries the same offset, which is what lines it up with the artwork — so
-		// dropping the origin under the pointer left every spawned die sitting low.
-		Vector2 wanted = new Vector2(
-			Mathf.Clamp(screenPosition.X, 80f, viewportSize.X - 240f),
-			Mathf.Clamp(screenPosition.Y, 90f, viewportSize.Y - 80f));
-		die.GlobalPosition = wanted - die.CollisionOffset;
+		if (animate)
+			die.Appear();
+		if (!quiet)
+			Sfx.Play("spawn", 0f, 0.05f);
+		die.GlobalPosition = ClampSpawn(screenPosition) - die.CollisionOffset;
 		RegisterDie(die);
 		SelectOnly(die);
 	}
@@ -1205,6 +1341,8 @@ public partial class GameManager : Node2D
 	private void LoadPack()
 	{
 		Pack.Clear();
+		packOffsets.Clear();
+		packScales.Clear();
 		using FileAccess file = FileAccess.Open(PackPath, FileAccess.ModeFlags.Read);
 		if (file == null)
 		{
@@ -1232,6 +1370,17 @@ public partial class GameManager : Node2D
 			Pack.Add((scene.AsString(),
 				entry.TryGetValue("name", out Variant name) ? name.AsString() : "die",
 				new Rect2((float)box[0], (float)box[1], (float)box[2], (float)box[3])));
+
+			Vector2 offset = Vector2.Zero;
+			if (entry.TryGetValue("offset", out Variant off)
+				&& off.VariantType == Variant.Type.Array)
+			{
+				Godot.Collections.Array pair = off.AsGodotArray();
+				if (pair.Count >= 2)
+					offset = new Vector2((float)pair[0], (float)pair[1]);
+			}
+			packOffsets.Add(offset);
+			packScales.Add(entry.TryGetValue("scale", out Variant sc) ? (float)sc : 1f);
 		}
 	}
 

@@ -66,6 +66,22 @@ def label_of(die, scene_file):
     return f"d{len(faces_of(die))}"
 
 
+def collider_offset(scene_file):
+    """The die's CollisionShape2D offset, straight out of its scene.
+
+    The art is drawn centred on the die's origin, but the die is *placed* by subtracting
+    this — it is what lines the collider up with the drawing. So where the art ends up
+    is the icon offset minus this, and a placeholder that ignores it stands about twelve
+    pixels low.
+    """
+    text = open(os.path.join(SCENES, scene_file), encoding="utf-8").read()
+    block = text.split('[node name="CollisionShape2D"', 1)
+    if len(block) < 2:
+        return 0.0, 0.0
+    found = re.search(r"position = Vector2\(([-\d.]+), ([-\d.]+)\)", block[1])
+    return (float(found.group(1)), float(found.group(2))) if found else (0.0, 0.0)
+
+
 def resting_frame(die):
     """The last frame of clip 1 — the die sitting still, which is what an icon wants.
 
@@ -81,6 +97,16 @@ def resting_frame(die):
         if np.asarray(cell)[:, :, 3].max() > 0:
             return cell
     raise SystemExit(f"{die}: no drawn frame found")
+
+
+def crop_box(cell):
+    """The die's bounding box within its 128px frame, or None."""
+    alpha = np.asarray(cell)[:, :, 3]
+    rows = np.flatnonzero(alpha.max(axis=1) > 25)
+    cols = np.flatnonzero(alpha.max(axis=0) > 25)
+    if not len(rows) or not len(cols):
+        return None
+    return int(cols[0]), int(rows[0]), int(cols[-1]) + 1, int(rows[-1]) + 1
 
 
 def crop_to_die(cell):
@@ -106,23 +132,42 @@ def main():
 
     sheet = Image.new("RGBA", (ICON * len(PACK), ICON), (0, 0, 0, 0))
     manifest = []
-    print(f"{'die':6}{'faces':>7}{'name':>10}{'cropped':>12}{'cell':>18}")
+    print(f"{'die':6}{'faces':>7}{'name':>10}{'cropped':>12}{'offset':>12}")
     for i, (die, scene_file) in enumerate(PACK):
-        art = crop_to_die(resting_frame(die))
+        frame = resting_frame(die)
+        box = crop_box(frame)
+        # Where the drawn die sits relative to its own origin. The sprite centres the
+        # whole 128px cell on the origin, so the art's centre is this far off it. The
+        # loading placeholder is positioned by this, and without it the real die would
+        # visibly jump when it replaces the icon.
+        art = [((box[0] + box[2]) / 2 - CELL / 2),
+               ((box[1] + box[3]) / 2 - CELL / 2)] if box else [0.0, 0.0]
+        collider = collider_offset(scene_file)
+        # Where the art lands relative to the point the player dropped the die on.
+        offset = [round(art[0] - collider[0], 1), round(art[1] - collider[1], 1)]
+        cropped = crop_to_die(frame)
         # Scale the long side to the cell and centre it, so every die fills its button
         # equally whatever its shape.
-        scale = ICON / max(art.width, art.height)
-        size = (max(1, round(art.width * scale)), max(1, round(art.height * scale)))
-        art = art.resize(size, Image.LANCZOS)
+        scale = ICON / max(cropped.width, cropped.height)
+        size = (max(1, round(cropped.width * scale)),
+                max(1, round(cropped.height * scale)))
+        cropped = cropped.resize(size, Image.LANCZOS)
         at = (i * ICON + (ICON - size[0]) // 2, (ICON - size[1]) // 2)
-        sheet.paste(art, at)
+        sheet.paste(cropped, at)
         manifest.append({
             "scene": f"res://scenes/{scene_file}",
             "name": label_of(die, scene_file),
             "icon": [i * ICON, 0, ICON, ICON],
+            "offset": offset,
+            # How much the art was resized to fit its 64px cell. It is *not* 1.0 — the
+            # dice are not the same size in frame, so this runs from 0.91 for the d4
+            # (70px across) to 1.08 for the numbered d6 (59px). The loading placeholder
+            # draws the icon at 1/scale to get back to the die's true size; skip that
+            # and every die jumps by up to 9% when the real one replaces it.
+            "scale": round(scale, 4),
         })
         print(f"{die:6}{len(faces_of(die)):>7}{manifest[-1]['name']:>10}"
-              f"{f'{art.width}x{art.height}':>12}{str(manifest[-1]['icon']):>18}")
+              f"{f'{cropped.width}x{cropped.height}':>12}{str(offset):>12}")
 
     if not args.write:
         print("\n(dry run — pass --write to save)")
