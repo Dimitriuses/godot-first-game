@@ -27,7 +27,7 @@ public partial class Capture : Node
 	private const string RollAnimation = "3";
 
 	// Board layout: position -> the face that die should show, and which entry of
-	// GameManager.DiceScenes it is. Literal, so the same picture comes out every time.
+	// GameManager.Pack it is. Literal, so the same picture comes out every time.
 	// Entry 0 is the die game.tscn already contains, which is the d6, so its Scene must
 	// be the d6's index.
 	//
@@ -94,11 +94,10 @@ public partial class Capture : Node
 		for (int i = 1; i < Board.Length; i++)
 		{
 			int k = Board[i].Scene;
-			if (k >= game.DiceScenes.Count)
-				GD.PushWarning($"Board entry {i} wants die scene {k}; only "
-					+ $"{game.DiceScenes.Count} are configured");
-			game.SpawnDie(game.DiceScenes[Mathf.Min(k, game.DiceScenes.Count - 1)],
-				Board[i].Pos);
+			if (k >= game.Pack.Count)
+				GD.PushWarning($"Board entry {i} wants die {k}; only "
+					+ $"{game.Pack.Count} are in the pack");
+			game.SpawnDie(Mathf.Min(k, game.Pack.Count - 1), Board[i].Pos);
 		}
 		await Frames(4);
 

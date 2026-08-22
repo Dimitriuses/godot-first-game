@@ -414,6 +414,18 @@ why. Do not rebuild it without reading that first.
   measurement — the same position delta `moveSpeed` was already taking — and is what the
   sound uses. The *re-roll* threshold beside it still reads `LinearVelocity`, deliberately:
   it was tuned against those numbers and changing it would change how the game plays.
+- **Loading a die's `PackedScene` loads its whole sheet set, instantly.** Not on
+  instantiation — on `GD.Load`. Measured: 180 MB of texture memory for the d20's scene
+  alone, and `game.tscn` used to hold all eight in an exported `Array[PackedScene]`, so
+  **727 MB was resident before a single die was thrown**. `SpriteFrames` holds an
+  `AtlasTexture` per frame and each references its sheet; there is no partial load, and
+  freeing the die does not give it back.
+
+  So the pack is a **manifest of paths**, `assets/dice/pack.json`, and a scene is loaded
+  the first time a die of that kind is actually spawned. Startup is 79 MB. **Never put a
+  die scene in an exported property, and never instantiate one to ask it a question** —
+  that was how the palette used to build its buttons, and it was the whole 727 MB. It
+  draws from a 50 KB icon sheet now.
 - **Scale the sprite, never the body.** A `RigidBody2D`'s `Scale` takes its collision
   shape with it, so a die animating in from nothing would arrive with a collider growing
   out of the floor. `Dice` scales `AnimatedSprite` instead — and does it through *two*
@@ -536,7 +548,9 @@ up an interrupted run. Budget about a minute per landing clip: 48 for a whole d2
 
 All eight dice in the pack are rendered: 46.34 MB of sheets and 7,396 atlas regions
 (ROADMAP 8). Adding one is an entry in `dice_config.py`, its two
-tables, a run, and adding the generated scene to `DiceScenes` in `scenes/game.tscn`. **No
+tables, a run, and `python tools/dice-render/make_icons.py --write`, which regenerates the
+palette's icon sheet and `assets/dice/pack.json` — the manifest that *is* the pack. Nothing
+in `scenes/game.tscn` has to change any more. **No
 game code changes** — that is what ROADMAP 8d was for.
 
 The two tables cannot be derived, so they are read by eye, once, off sheets the tool renders:

@@ -388,8 +388,13 @@ game; they are the things that stand between it and a Pages URL, listed here so 
   preset and running the export: Godot refuses before it starts, with *"Export to Web is
   currently not supported in Godot 4 when using C#/.NET."* This is the blocker, and the
   reason item 9 is a hand-written GDScript port rather than a build setting.
-- **47 MB of dice artwork would go into the download.** `export_filter="all_resources"`
-  ships everything under `assets/`, and `assets/dice/` alone is 47 MB across eight dice.
+- **47 MB of dice artwork would go into the download — and it used to be 727 MB in
+  memory.** The memory half is **fixed**: the pack is now a manifest of paths
+  (`assets/dice/pack.json`) and a die's sheets load only when one is spawned, so startup
+  went from 727 MB of texture memory to 79 MB. See CLAUDE.md and
+  [tools/clip-lab/](../tools/clip-lab/README.md). The download half is still open.
+  `export_filter="all_resources"` ships everything under `assets/`, and `assets/dice/`
+  alone is 47 MB across eight dice.
   That is fine for a desktop binary and not fine for a browser. The options are now
   **measured** rather than estimated — see [tools/clip-lab/](../tools/clip-lab/README.md).
   Cutting every clip from 91 frames to 61 saves 30% and needs no redesign; the shared-prefix

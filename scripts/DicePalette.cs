@@ -7,10 +7,20 @@ public partial class DicePalette : Control
 	/// the spawn rather than being looked up afterwards, because by the time the die
 	/// exists the drag that asked for it is over.
 	[Signal]
-	public delegate void SpawnRequestedEventHandler(PackedScene scene,
+	public delegate void SpawnRequestedEventHandler(string scenePath,
 		Vector2 screenPosition, int theme);
 
-	public Godot.Collections.Array<PackedScene> DiceScenes { get; set; } = new();
+	/// <summary>
+	/// The pack, as paths and icon regions — never as loaded scenes.
+	///
+	/// The palette used to build each button by instantiating the die's scene and taking
+	/// a frame off it. That loads the die's entire sheet set: 727 MB of texture memory
+	/// for the eight of them, before anything had been thrown. It now draws from one
+	/// 50 KB icon sheet and touches no die scene at all.
+	/// </summary>
+	public List<(string Scene, string Name, Rect2 Icon)> Pack { get; set; } = new();
+
+	private const string IconSheet = "res://assets/dice/icons.png";
 
 	/// Four across and two down holds the whole pack without scrolling, which is what
 	/// sets the width: four buttons, three gaps between them and a margin either side.
@@ -43,7 +53,7 @@ public partial class DicePalette : Control
 	private readonly List<int> slotThemes = new();
 	private readonly List<string> slotNames = new();
 
-	private PackedScene draggingScene;
+	private string draggingScene;
 	private Texture2D draggingIcon;
 	private int draggingSlot = -1;
 	private bool isOpen;
@@ -143,12 +153,15 @@ public partial class DicePalette : Control
 		grid.AddThemeConstantOverride("v_separation", (int)ButtonGap);
 		content.AddChild(grid);
 
-		foreach (PackedScene scene in DiceScenes)
+		var sheet = GD.Load<Texture2D>(IconSheet);
+		if (sheet == null)
+			GD.PushError($"no icon sheet at {IconSheet}; run tools/dice-render/make_icons.py");
+		foreach ((string scene, string label, Rect2 region) in Pack)
 		{
-			if (scene == null)
-				continue;
-			(string label, Texture2D icon) = DescribeDie(scene);
-			AddDieOption(grid, label, CropToDie(icon), scene);
+			// Already cropped and centred by the generator, so no CropToDie here.
+			Texture2D icon = sheet == null ? null
+				: new AtlasTexture { Atlas = sheet, Region = region };
+			AddDieOption(grid, label, icon, scene);
 		}
 
 		// Both gestures in one label at one size. As two labels they cost a third line,
@@ -204,7 +217,7 @@ public partial class DicePalette : Control
 	}
 
 	private void AddDieOption(Container list, string label, Texture2D icon,
-		PackedScene scene)
+		string scene)
 	{
 		int slot = slotButtons.Count;
 
@@ -377,21 +390,7 @@ public partial class DicePalette : Control
 		};
 	}
 
-	/// <summary>
-	/// What to call a die type and what to show for it, both read off the scene rather
-	/// than hardcoded: the number of numbered clips is the number of faces, and the last
-	/// frame of clip "1" is that die sitting at rest.
-	/// </summary>
-	private static (string, Texture2D) DescribeDie(PackedScene scene)
-	{
-		var probe = scene.Instantiate<Dice>();
-		string label = probe.DisplayName;
-		Texture2D icon = probe.RestingFrame(1);
-		probe.Free();               // never entered the tree, so Free not QueueFree
-		return (label, icon);
-	}
-
-	private void OnDieButtonInput(InputEvent @event, PackedScene scene, Texture2D icon,
+	private void OnDieButtonInput(InputEvent @event, string scene, Texture2D icon,
 		int slot)
 	{
 		if (@event is not InputEventMouseButton mouseButton

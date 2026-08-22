@@ -9,7 +9,24 @@ public partial class GameManager : Node2D
 	[Export] public Area2D DiceArea;
 	/// One entry per die type the palette offers. An array rather than a single scene
 	/// so a d20 is an extra element, not a code change.
-	[Export] public Godot.Collections.Array<PackedScene> DiceScenes = new();
+	/// <summary>
+	/// The pack, read from a manifest rather than held as an exported array of
+	/// `PackedScene`.
+	///
+	/// That is not a style choice. Loading a die's `PackedScene` loads its whole sheet
+	/// set — measured at 180 MB of texture memory for the d20 — and an exported array
+	/// loads every entry the moment `game.tscn` does, whether or not a die is ever
+	/// thrown. Holding paths and loading on demand is what keeps a board of two d6 from
+	/// paying for a d20 nobody touched.
+	/// </summary>
+	[Export] public string PackPath = "res://assets/dice/pack.json";
+
+	/// One entry per die in the pack, in palette order.
+	public readonly List<(string Scene, string Name, Rect2 Icon)> Pack = new();
+
+	/// Scenes already loaded, kept so a second d6 costs nothing. Godot caches resources
+	/// itself; this only saves the repeated path lookup.
+	private readonly Dictionary<string, PackedScene> loadedScenes = new();
 
 	/// Fastest a dragged die is steered or released at, px/s. Without a bound, a flick
 	/// hands the solver an impulse it has to fight, which is how dice used to come out
@@ -58,7 +75,7 @@ public partial class GameManager : Node2D
 
 	/// A copy waiting to be put down: the die type taken, the face it was showing, and
 	/// the ghost that follows the cursor until a click places it.
-	private PackedScene pendingCopyScene;
+	private string pendingCopyScene;
 	private int pendingCopyFace;
 	private int pendingCopyTheme;
 	private TextureRect copyPreview;
@@ -99,16 +116,18 @@ public partial class GameManager : Node2D
 		DiceArea.BodyExited += OnBodyExited;
 		boardBounds = ComputeBoardBounds();
 
+		LoadPack();
+
 		// Before the panels, so anything that makes a noise while building has somewhere
 		// to send it.
 		AddChild(new Sfx { Name = "Sfx" });
 
 		uiLayer = new CanvasLayer { Name = "GameUiLayer" };
 		AddChild(uiLayer);
-		palette = new DicePalette { Name = "DicePalette", DiceScenes = DiceScenes };
+		palette = new DicePalette { Name = "DicePalette", Pack = Pack };
 		uiLayer.AddChild(palette);
 		palette.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		palette.SpawnRequested += (scene, at, theme) => SpawnDie(scene, at, (int)theme);
+		palette.SpawnRequested += (path, at, theme) => SpawnDie(path, at, (int)theme);
 
 		diceHud = new DiceHud { Name = "DiceHud" };
 		uiLayer.AddChild(diceHud);
@@ -638,6 +657,24 @@ public partial class GameManager : Node2D
 		ClearDragState();
 	}
 
+	/// <summary>
+	/// Put a die from the pack on the board, loading its scene if this is the first one.
+	///
+	/// The path overload is what everything outside this class should use — it is the
+	/// only one that keeps the pack lazy.
+	/// </summary>
+	public void SpawnDie(string scenePath, Vector2 screenPosition,
+		int theme = DiceTheme.Bone) =>
+		SpawnDie(SceneAtPath(scenePath), screenPosition, theme);
+
+	/// The die at this place in the pack, by palette order.
+	public void SpawnDie(int slot, Vector2 screenPosition,
+		int theme = DiceTheme.Bone)
+	{
+		if (slot >= 0 && slot < Pack.Count)
+			SpawnDie(Pack[slot].Scene, screenPosition, theme);
+	}
+
 	public void SpawnDie(PackedScene scene, Vector2 screenPosition,
 		int theme = DiceTheme.Bone)
 	{
@@ -854,7 +891,7 @@ public partial class GameManager : Node2D
 		if (die == null || !IsInstanceValid(die))
 			return;
 
-		PackedScene scene = SceneOf(die);
+		string scene = SceneOf(die);
 		if (scene == null)
 		{
 			GD.PushWarning($"{die.Name}: cannot tell which scene it came from, not copying");
@@ -908,7 +945,7 @@ public partial class GameManager : Node2D
 		if (pendingCopyScene == null)
 			return false;
 
-		PackedScene scene = pendingCopyScene;
+		string scene = pendingCopyScene;
 		int face = pendingCopyFace;
 		int theme = pendingCopyTheme;
 		if (!keepGhost)
@@ -922,25 +959,11 @@ public partial class GameManager : Node2D
 
 	/// Which scene a die was made from. Godot records that on the instance root, so it
 	/// holds for the die placed in game.tscn as well as for every one spawned since.
-	private PackedScene SceneOf(Dice die)
-	{
-		if (!string.IsNullOrEmpty(die.SceneFilePath))
-			return GD.Load<PackedScene>(die.SceneFilePath);
-
-		// Built in code rather than instanced: fall back to whichever configured type
-		// carries the same name.
-		foreach (PackedScene candidate in DiceScenes)
-		{
-			if (candidate == null)
-				continue;
-			var probe = candidate.Instantiate<Dice>();
-			bool match = probe.DisplayName == die.DisplayName;
-			probe.Free();
-			if (match)
-				return candidate;
-		}
-		return null;
-	}
+	/// Where a die came from, as a path. Never loads anything: a die that exists has
+	/// already had its scene loaded, and asking for it again by name would defeat the
+	/// point of loading on demand.
+	private string SceneOf(Dice die) =>
+		string.IsNullOrEmpty(die.SceneFilePath) ? null : die.SceneFilePath;
 
 	public override void _Process(double delta)
 	{
@@ -1154,14 +1177,62 @@ public partial class GameManager : Node2D
 
 	/// The configured scene with this path, or null. Restricted to the configured pack on
 	/// purpose: a save should not be able to name an arbitrary resource to load.
+	/// <summary>
+	/// The scene at this path, loaded now if it has not been already, or null if the
+	/// path is not one of the pack's.
+	///
+	/// The check is what stops a hand-edited save naming an arbitrary resource, and it
+	/// is also what makes loading here safe: only eight paths can ever reach `GD.Load`.
+	/// </summary>
 	private PackedScene SceneAtPath(string path)
 	{
 		if (string.IsNullOrEmpty(path))
 			return null;
-		foreach (PackedScene candidate in DiceScenes)
-			if (candidate != null && candidate.ResourcePath == path)
-				return candidate;
-		return null;
+		if (loadedScenes.TryGetValue(path, out PackedScene cached))
+			return cached;
+		if (!Pack.Exists(entry => entry.Scene == path))
+			return null;
+		var loaded = GD.Load<PackedScene>(path);
+		if (loaded != null)
+			loadedScenes[path] = loaded;
+		return loaded;
+	}
+
+	/// <summary>
+	/// Read the pack manifest: which dice there are, what they are called, and where
+	/// their icons sit in the sheet. Generated by tools/dice-render/make_icons.py.
+	/// </summary>
+	private void LoadPack()
+	{
+		Pack.Clear();
+		using FileAccess file = FileAccess.Open(PackPath, FileAccess.ModeFlags.Read);
+		if (file == null)
+		{
+			GD.PushError($"no die pack at {PackPath}; the palette will be empty");
+			return;
+		}
+		Variant parsed = Json.ParseString(file.GetAsText());
+		if (parsed.VariantType != Variant.Type.Array)
+		{
+			GD.PushError($"{PackPath} is not a JSON array");
+			return;
+		}
+		foreach (Variant item in parsed.AsGodotArray())
+		{
+			if (item.VariantType != Variant.Type.Dictionary)
+				continue;
+			var entry = item.AsGodotDictionary();
+			if (!entry.TryGetValue("scene", out Variant scene)
+				|| !entry.TryGetValue("icon", out Variant icon)
+				|| icon.VariantType != Variant.Type.Array)
+				continue;
+			Godot.Collections.Array box = icon.AsGodotArray();
+			if (box.Count < 4)
+				continue;
+			Pack.Add((scene.AsString(),
+				entry.TryGetValue("name", out Variant name) ? name.AsString() : "die",
+				new Rect2((float)box[0], (float)box[1], (float)box[2], (float)box[3])));
+		}
 	}
 
 	/// Empty the board without the sounds or the animations — this is a board being

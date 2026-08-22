@@ -189,7 +189,15 @@ Adding one is a config entry, its two tables, and a run:
 python tools/dice-render/pipeline.py d10 --run --install --scene
 ```
 
-then add the generated scene to `DiceScenes` on the `GameManager` node in `scenes/game.tscn`.
+then regenerate the palette's icons and the pack manifest:
+
+```sh
+python tools/dice-render/make_icons.py --write
+```
+
+That writes `assets/dice/icons.png` and `assets/dice/pack.json`, and the manifest is what
+the game reads — there is nothing to edit in `scenes/game.tscn`. Putting die scenes in an
+exported array is what made the game load all 47 MB of sheets at startup; see CLAUDE.md.
 Nothing in the game code changes: `Dice.cs` counts a die's faces off its own clips, and the
 palette derives each entry's label and icon from the die itself.
 

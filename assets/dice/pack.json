@@ -1,0 +1,82 @@
+[
+  {
+    "scene": "res://scenes/d4.tscn",
+    "name": "d4",
+    "icon": [
+      0,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/dice.tscn",
+    "name": "d6",
+    "icon": [
+      64,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d6n.tscn",
+    "name": "d6 num",
+    "icon": [
+      128,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d8.tscn",
+    "name": "d8",
+    "icon": [
+      192,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d10.tscn",
+    "name": "d10",
+    "icon": [
+      256,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d10p.tscn",
+    "name": "d10 %",
+    "icon": [
+      320,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d12.tscn",
+    "name": "d12",
+    "icon": [
+      384,
+      0,
+      64,
+      64
+    ]
+  },
+  {
+    "scene": "res://scenes/d20.tscn",
+    "name": "d20",
+    "icon": [
+      448,
+      0,
+      64,
+      64
+    ]
+  }
+]

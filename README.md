@@ -150,7 +150,9 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             ShakeGesture.cs  decides what counts as shaking the device
             UiSkin.cs        the look and placement of the corner buttons
 shaders/    dice_theme.gdshader  recolours a die without re-rendering it
-assets/     dice/            die animation frames, a folder per die:
+assets/     dice/            die animation frames, a folder per die, plus
+                             icons.png and pack.json (the palette's sheet and
+                             the manifest that lists the pack):
                              d4 d6 d6n d8 d10 d10p d12 d20
                              (see docs/ASSETS.md)
             audio/           seventeen synthesised sound effects
