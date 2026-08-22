@@ -665,6 +665,8 @@ public partial class DiceHud : Control
 		entry.IconCentre = cropped.Region.Position - full.Region.Position + crop / 2f;
 	}
 
+	public bool IsOpen => isOpen;
+
 	public void SetOpen(bool open, bool animate)
 	{
 		// Only when the player did it. The silent form is how the screenshot tool and the

@@ -72,6 +72,10 @@ public partial class Capture : Node
 		await Frames(4);
 
 		var game = GD.Load<PackedScene>("res://scenes/game.tscn").Instantiate<GameManager>();
+		// Before it enters the tree, so _Ready never reads the save. Without this the
+		// README images would show whatever board the machine that ran this happened to
+		// have left behind — and would overwrite it on the way out.
+		game.PersistBoard = false;
 		AddChild(game);
 		await Frames(10);           // let _Ready build the palette and the HUD
 

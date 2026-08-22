@@ -26,6 +26,15 @@ public partial class GameManager : Node2D
 	[Export] public float ShakeDuration = 0.3f;
 	[Export] public float ShakeFrequency = 55f;
 
+	/// <summary>
+	/// Whether this board reads and writes the save file.
+	///
+	/// Off for the screenshot tool and for harnesses. Both would otherwise inherit
+	/// whatever board the machine happened to have saved — and, worse, overwrite it on
+	/// the way out.
+	/// </summary>
+	[Export] public bool PersistBoard = true;
+
 	private readonly List<Dice> dice = new();
 	private readonly List<Dice> selectedDice = new();
 	private readonly HashSet<Dice> deletingDice = new();
@@ -35,6 +44,7 @@ public partial class GameManager : Node2D
 	private DiceHud diceHud;
 	private DiceMenu diceMenu;
 	private DicePalette palette;
+	private MuteButton muteButton;
 	private CanvasLayer uiLayer;
 
 	/// A copy waiting to be put down: the die type taken, the face it was showing, and
@@ -56,6 +66,17 @@ public partial class GameManager : Node2D
 	private Vector2 lastMousePosition;
 	private Vector2 dragVelocity;
 	private Vector2 spawnPosition;
+
+	/// The last state written, as JSON. The autosave compares against it rather than
+	/// tracking a dirty flag through a dozen call sites: it catches the mute button and
+	/// the palette's colours as readily as it catches a die being deleted, and a settled
+	/// board serialises identically and so writes nothing.
+	private string lastSaved = "";
+	private ulong nextSaveCheckMs;
+	/// How often the board is compared against what is on disk. This is the primary way
+	/// a save happens, not a backstop: a browser tab can close without anything being
+	/// notified, so the last second of play is what a web build stands to lose.
+	private const ulong SaveCheckMs = 1000;
 	private Vector2 singleGrabOffset;
 	private Rect2 boardBounds;
 
@@ -82,7 +103,8 @@ public partial class GameManager : Node2D
 		diceHud.DeleteRequested += DeleteDie;
 		diceHud.DeleteAllRequested += DeleteAllDice;
 
-		var mute = new MuteButton { Name = "MuteButton" };
+		muteButton = new MuteButton { Name = "MuteButton" };
+		MuteButton mute = muteButton;
 		uiLayer.AddChild(mute);
 		mute.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
@@ -109,11 +131,36 @@ public partial class GameManager : Node2D
 			SelectOnly(dice[0]);
 		}
 
+		// After the spawn point is taken from the scene's own die, because that die is
+		// about to be cleared away and the respawn anchor should not go with it.
+		if (PersistBoard && SaveGame.Exists())
+			ApplySave(SaveGame.Load());
+
 		UpdateProcessing();         // idle until a copy or a shake needs the frame
+	}
+
+	/// <summary>
+	/// A real quit, while the tree is still standing.
+	///
+	/// **Not `_ExitTree`**, which was the first attempt and is too late: children leave
+	/// the tree before their parent, so every die has already run its `TreeExiting`
+	/// handler and taken itself out of the list, and `Sfx.Instance` has already been
+	/// cleared. The board saved there is an empty one that is not muted.
+	/// </summary>
+	public override void _Notification(int what)
+	{
+		if (what == NotificationWMCloseRequest && PersistBoard)
+			SaveIfChanged();
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (PersistBoard && Time.GetTicksMsec() >= nextSaveCheckMs)
+		{
+			nextSaveCheckMs = Time.GetTicksMsec() + SaveCheckMs;
+			SaveIfChanged();
+		}
+
 		Vector2 mouse = GetGlobalMousePosition();
 
 		// Let the cursor leave the board, but never let the pin follow it out. Dragged
@@ -825,6 +872,207 @@ public partial class GameManager : Node2D
 		// Shrinks away and frees itself. Everything above has already taken it out of the
 		// lists, so what is left on the board is a picture finishing its exit.
 		die.Vanish();
+	}
+
+	// ------------------------------------------------------------------ persistence
+
+	/// <summary>
+	/// Everything worth remembering: the settings, and every die on the board.
+	///
+	/// Dice are recorded by the path of the scene they came from rather than by an index
+	/// into <c>DiceScenes</c>, so reordering the pack cannot turn somebody's d20 into a
+	/// d4. A die whose scene is no longer configured is dropped on load rather than
+	/// guessed at.
+	/// </summary>
+	private Godot.Collections.Dictionary CollectSave()
+	{
+		var themes = new Godot.Collections.Array();
+		for (int i = 0; i < palette.SlotCount; i++)
+			themes.Add(palette.SlotTheme(i));
+
+		// The savable dice, gathered first, because a pairing is stored as an index into
+		// this list and it must not be an index into one that skipped an entry.
+		var live = new List<Dice>();
+		foreach (Dice die in dice)
+			if (IsInstanceValid(die) && !string.IsNullOrEmpty(die.SceneFilePath))
+				live.Add(die);
+
+		var saved = new Godot.Collections.Array();
+		foreach (Dice die in live)
+			saved.Add(new Godot.Collections.Dictionary
+			{
+				["scene"] = die.SceneFilePath,
+				// Rounded, and not only for tidiness: the autosave decides whether to
+				// write by comparing this against the last one, and unrounded positions
+				// change in the sixth decimal for as long as the physics is awake.
+				["x"] = Mathf.Round(die.GlobalPosition.X),
+				["y"] = Mathf.Round(die.GlobalPosition.Y),
+				["rot"] = Mathf.Snapped(die.Rotation, 0.001f),
+				["face"] = die.GetResult(),
+				["theme"] = die.Theme,
+				["partner"] = die.Partner != null && IsInstanceValid(die.Partner)
+					? live.IndexOf(die.Partner) : -1,
+			});
+
+		return new Godot.Collections.Dictionary
+		{
+			["settings"] = new Godot.Collections.Dictionary
+			{
+				["muted"] = Sfx.Muted,
+				["palette_open"] = palette.IsOpen,
+				["list_open"] = diceHud.IsOpen,
+				["palette_themes"] = themes,
+			},
+			["dice"] = saved,
+		};
+	}
+
+	/// Write, but only when something has actually changed. Called on a timer rather than
+	/// from every place that could change something, so nothing can be forgotten.
+	private void SaveIfChanged()
+	{
+		if (palette == null || diceHud == null)
+			return;
+		Godot.Collections.Dictionary data = CollectSave();
+		string text = Json.Stringify(data);
+		if (text == lastSaved)
+			return;
+		lastSaved = text;
+		SaveGame.Store(data);
+	}
+
+	/// <summary>
+	/// Put a saved board back.
+	///
+	/// Every field is optional and every one is checked. A save is a file on someone's
+	/// machine: it can be half-written, hand-edited, or left over from a build that knew
+	/// different dice, and none of those may throw.
+	/// </summary>
+	private void ApplySave(Godot.Collections.Dictionary data)
+	{
+		if (data == null)
+			return;
+
+		if (data.TryGetValue("settings", out Variant settingsValue)
+			&& settingsValue.VariantType == Variant.Type.Dictionary)
+		{
+			var settings = settingsValue.AsGodotDictionary();
+			if (settings.TryGetValue("muted", out Variant muted))
+			{
+				Sfx.SetMuted(muted.AsBool());
+				// The button was built before this ran, so it is still drawn for whatever
+				// the sound was before the save was read.
+				muteButton?.Refresh();
+			}
+			if (settings.TryGetValue("palette_themes", out Variant themes)
+				&& themes.VariantType == Variant.Type.Array)
+			{
+				Godot.Collections.Array list = themes.AsGodotArray();
+				for (int i = 0; i < list.Count && i < palette.SlotCount; i++)
+					palette.SetSlotTheme(i, Mathf.Clamp((int)list[i], 0,
+						DiceTheme.Count - 1));
+			}
+			// Silent: the drawers are being put back where they were, not opened by a
+			// player, and a game that chimes twice on startup is a game with a bug.
+			if (settings.TryGetValue("palette_open", out Variant paletteOpen))
+				palette.SetDrawerOpen(paletteOpen.AsBool(), false);
+			if (settings.TryGetValue("list_open", out Variant listOpen))
+				diceHud.SetOpen(listOpen.AsBool(), false);
+		}
+
+		if (!data.TryGetValue("dice", out Variant diceValue)
+			|| diceValue.VariantType != Variant.Type.Array)
+			return;
+		Godot.Collections.Array entries = diceValue.AsGodotArray();
+
+		ClearBoardSilently();
+
+		// Nulls are kept in place so the partner indices still line up.
+		var restored = new List<Dice>();
+		foreach (Variant item in entries)
+		{
+			restored.Add(item.VariantType == Variant.Type.Dictionary
+				? RestoreDie(item.AsGodotDictionary()) : null);
+		}
+
+		for (int i = 0; i < entries.Count; i++)
+		{
+			if (entries[i].VariantType != Variant.Type.Dictionary || restored[i] == null)
+				continue;
+			var entry = entries[i].AsGodotDictionary();
+			if (!entry.TryGetValue("partner", out Variant partnerValue))
+				continue;
+			int other = (int)partnerValue;
+			if (other < 0 || other >= restored.Count || restored[other] == null)
+				continue;
+			// Both sides together, and only if the pair is still a legal one — the save
+			// may predate a change to what can be linked.
+			if (Dice.CanPair(restored[i], restored[other]))
+			{
+				restored[i].Partner = restored[other];
+				restored[other].Partner = restored[i];
+			}
+		}
+		foreach (Dice die in dice)
+			diceHud.UpdateValue(die, die.Value);
+
+		if (dice.Count > 0)
+			SelectOnly(dice[0]);
+	}
+
+	/// One die from its saved entry, put down rather than played in: no arrival animation
+	/// and no spawn sound, because eight dice popping and chiming at startup is a mess.
+	private Dice RestoreDie(Godot.Collections.Dictionary entry)
+	{
+		PackedScene scene = SceneAtPath(
+			entry.TryGetValue("scene", out Variant path) ? path.AsString() : "");
+		if (scene == null)
+			return null;
+
+		Dice die = scene.Instantiate<Dice>();
+		AddChild(die);
+		die.Theme = entry.TryGetValue("theme", out Variant theme)
+			? Mathf.Clamp((int)theme, 0, DiceTheme.Count - 1) : DiceTheme.Bone;
+		die.GlobalPosition = ClampInto(OriginBoundsFor(die), new Vector2(
+			entry.TryGetValue("x", out Variant x) ? (float)x : spawnPosition.X,
+			entry.TryGetValue("y", out Variant y) ? (float)y : spawnPosition.Y));
+		die.Rotation = entry.TryGetValue("rot", out Variant rot) ? (float)rot : 0f;
+		RegisterDie(die);
+
+		int face = entry.TryGetValue("face", out Variant f) ? (int)f : 1;
+		die.PlaceOnFace(Mathf.Clamp(face, 1, die.FaceCount));
+		return die;
+	}
+
+	/// The configured scene with this path, or null. Restricted to the configured pack on
+	/// purpose: a save should not be able to name an arbitrary resource to load.
+	private PackedScene SceneAtPath(string path)
+	{
+		if (string.IsNullOrEmpty(path))
+			return null;
+		foreach (PackedScene candidate in DiceScenes)
+			if (candidate != null && candidate.ResourcePath == path)
+				return candidate;
+		return null;
+	}
+
+	/// Empty the board without the sounds or the animations — this is a board being
+	/// replaced before anyone has seen it, not dice being deleted.
+	private void ClearBoardSilently()
+	{
+		CancelDrag();
+		foreach (Dice die in new List<Dice>(dice))
+		{
+			if (die.Partner != null && IsInstanceValid(die.Partner))
+				die.Partner.Partner = null;
+			die.Partner = null;
+			dice.Remove(die);
+			selectedDice.Remove(die);
+			diceHud.RemoveDie(die);
+			die.SetHovered(false);
+			die.QueueFree();
+		}
+		activeDie = null;
 	}
 
 	/// <summary>

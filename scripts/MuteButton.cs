@@ -69,7 +69,9 @@ public partial class MuteButton : Control
 		Refresh();
 	}
 
-	private void Refresh()
+	/// Public because the button is built before the save is read: a muted save would
+	/// otherwise leave the speaker drawn as though the sound were on.
+	public void Refresh()
 	{
 		button.TooltipText = Sfx.Muted
 			? $"Sound off — click or press {(char)MuteKey} to turn it on"

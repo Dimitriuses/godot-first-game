@@ -297,6 +297,28 @@ why. Do not rebuild it without reading that first.
   frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
   and the collision re-roll starts a clip. Anything that repositions dice should switch
   `ContactMonitor` off first — the screenshot tool does, after this cost it determinism twice.
+- **The board saves itself on a timer, not when it is asked to.** `GameManager` compares
+  the serialised state against the last one written, once a second, and writes only when it
+  differs. That catches the mute button and the palette's colours as readily as a die being
+  deleted, without a dirty flag threaded through a dozen call sites — and a settled board
+  serialises identically, so it writes nothing. Positions are **rounded to whole pixels**
+  for that comparison to work at all: unrounded, they change in the sixth decimal for as
+  long as the physics is awake and every tick would write.
+- **Do not save from `_ExitTree`.** Children leave the tree before their parent, so by the
+  time `GameManager` gets there every die has run its `TreeExiting` handler and taken itself
+  out of the list, and `Sfx.Instance` has been cleared: what gets written is an empty board
+  that is not muted. `NotificationWMCloseRequest` arrives while the tree is still standing.
+  A browser tab can close without notifying anything at all, which is the real reason the
+  timer is the primary mechanism rather than a backstop.
+- **`user://`, not `JavaScriptBridge` and not `localStorage`.** Godot maps `user://` to
+  IndexedDB in a web export, so ordinary `FileAccess` is already browser storage and there
+  is no second code path to write, test or port. The file is written with Godot's own `Json`
+  over `Godot.Collections.Dictionary` for the same reason — it is the half of this that
+  crosses to the GDScript tree (ROADMAP 9) untouched.
+- **Anything that instantiates `game.tscn` for its own purposes must set
+  `PersistBoard = false`.** `tools/screenshots/Capture.cs` does. Without it the README
+  images would show whatever board the machine that ran them happened to have saved, and
+  would overwrite the player's on the way out.
 - **A die is drawn about twelve pixels below its own origin.** The artwork is rendered
   with the die high in its cell — measured, the resting frame's centre sits 12 to 15px
   below the middle of the 128px frame — and the collider carries a matching

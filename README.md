@@ -49,6 +49,12 @@ corner — or **M** — switches off. The seventeen sounds are **synthesised, no
 Dice pop into existence and shrink away when deleted, both on eased curves rather than
 plain fades.
 
+The board and the settings **save themselves** — where every die is standing, which face it
+shows, its colour, which dice are linked, the palette's colours, the panels, and whether the
+sound is off. Close the game and reopen it and the table is as you left it. It writes to
+`user://`, which Godot maps to browser storage in a web export, so the same code will keep a
+Pages build's board between visits with nothing added.
+
 Dice come in seven colour schemes — bone, crimson, emerald, sapphire, amber, obsidian and
 ivory. Nothing is re-rendered for them and there are no extra images: a small shader reads
 each pixel's luminance and looks the colour up, so a themed die tumbles, blurs and lands
@@ -126,6 +132,7 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             DiceTheme.cs     the colour schemes, and the materials that apply them
             Sfx.cs           the voice pool, and how often a sound may repeat
             MuteButton.cs    the speaker in the corner, icon drawn rather than typed
+            SaveGame.cs      the one save file, read and written
             Player.cs        board-piece stub, unused (board game dropped)
 shaders/    dice_theme.gdshader  recolours a die without re-rendering it
 assets/     audio/           seventeen synthesised sound effects

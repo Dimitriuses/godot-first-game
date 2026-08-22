@@ -47,6 +47,7 @@ public partial class DicePalette : Control
 	private Texture2D draggingIcon;
 	private int draggingSlot = -1;
 	private bool isOpen;
+
 	private bool isDraggingIcon;
 	private Tween drawerTween;
 
@@ -255,6 +256,11 @@ public partial class DicePalette : Control
 		}
 		return -1;
 	}
+
+	/// How many dice the pack holds, so the save can walk them.
+	public int SlotCount => slotButtons.Count;
+
+	public bool IsOpen => isOpen;
 
 	public int SlotTheme(int slot) =>
 		slot >= 0 && slot < slotThemes.Count ? slotThemes[slot] : DiceTheme.Bone;
