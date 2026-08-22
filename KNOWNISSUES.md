@@ -337,7 +337,48 @@ you they had.
 
 ---
 
-## 8. Before a web deploy — what is not ready
+## 8. Two found by playing it, August 2026 — both fixed
+
+Neither showed up in any harness, because both are about *where* the UI is rather than what
+it does, and a harness that spawns a die by calling `SpawnDie` never asks.
+
+### 8a. A fifth of the board refused dropped dice
+
+`DicePalette` decided whether a drop counted by comparing the release against the drawer's
+**width**: `mouse.X > DrawerLeft + DrawerWidth`. That is a vertical strip 255px wide running
+the full height of the window — about **20% of the board** — and it refused every drop inside
+it whether or not a panel was actually there, and whether or not the die list underneath was
+even open. Dropping a die into the empty space below a closed die list silently did nothing.
+
+It was wrong in the other direction too, which nobody had noticed: x=1124 passes the test, so
+a die could be dropped **onto the mute and group-drag buttons** in the opposite corner.
+
+Now it asks `GetViewport().GuiGetHoveredControl()` — the same question `GameManager._Input`
+already asks to tell a click on the board from a click on a panel. That covers the drawer,
+the die list and the corner buttons at once, only where they really are, and follows them if
+they ever move. Verified mid-drag: the pressed slot button does not hold the hover over the
+board, so the answer is null exactly where a drop should land.
+
+### 8b. Respawn built a column off the bottom of the board
+
+`OnSpawnButton` laid the dice out four to a row, 54px apart, from the spawn point:
+
+```csharp
+ResetDie(dice[i], spawnPosition + new Vector2((i % 4) * 54f, (i / 4) * 54f));
+```
+
+Four wide however many there are, so the block only ever grew downward. Measured with 40
+dice: **12 of them ended outside the board, the worst 105.7px past the edge.** The spawn
+point sits 283px above the floor and ten rows is 540px.
+
+The block is now sized to the board — roughly square, spaced no wider than fits, centred on
+the spawn point unless that would hang it over an edge, and each die clamped individually by
+`ResetDie` afterwards. Same measurement: **0 outside, 0.0px past the edge.** No cap on the
+number of dice was needed; the arithmetic was the bug, not the count.
+
+---
+
+## 9. Before a web deploy — what is not ready
 
 The browser build is [ROADMAP](ROADMAP.md) item 9. None of the following is a bug in the
 game; they are the things that stand between it and a Pages URL, listed here so that

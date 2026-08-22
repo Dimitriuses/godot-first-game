@@ -685,13 +685,48 @@ public partial class GameManager : Node2D
 			selectedDice.Add(die);
 	}
 
+	/// <summary>
+	/// Gather every die back to the middle.
+	///
+	/// The block is sized to the board rather than being four dice wide however many
+	/// there are. That was the old rule, and with a lot of dice it built a column that
+	/// ran off the bottom of the board — 40 dice made ten rows, 540px of them, from a
+	/// spawn point 283px above the floor.
+	///
+	/// Roughly square, spaced no wider than fits, and centred on the spawn point unless
+	/// that would hang the block over an edge. `ResetDie` clamps each die individually
+	/// afterwards, so the arithmetic here only has to be close.
+	/// </summary>
 	public void OnSpawnButton()
 	{
 		CancelDrag();
-		if (dice.Count > 0)
-			Sfx.Play("respawn");
+		if (dice.Count == 0)
+			return;
+		Sfx.Play("respawn");
+
+		// Inset by a die, so a die *centred* on the edge of this box is still inside the
+		// board rather than half through the wall.
+		Rect2 inner = boardBounds.Grow(-40f);
+		int columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(dice.Count)));
+		int rows = Mathf.CeilToInt(dice.Count / (float)columns);
+
+		// Shrink the spacing rather than the block: dice that end up touching is what a
+		// gather looks like, dice off the board is not.
+		float spacing = Mathf.Min(54f,
+			Mathf.Min(inner.Size.X / Mathf.Max(1, columns - 1),
+				inner.Size.Y / Mathf.Max(1, rows - 1)));
+
+		var block = new Vector2((columns - 1) * spacing, (rows - 1) * spacing);
+		Vector2 topLeft = spawnPosition - block / 2f;
+		topLeft = new Vector2(
+			Mathf.Clamp(topLeft.X, inner.Position.X,
+				Mathf.Max(inner.Position.X, inner.End.X - block.X)),
+			Mathf.Clamp(topLeft.Y, inner.Position.Y,
+				Mathf.Max(inner.Position.Y, inner.End.Y - block.Y)));
+
 		for (int i = 0; i < dice.Count; i++)
-			ResetDie(dice[i], spawnPosition + new Vector2((i % 4) * 54f, (i / 4) * 54f));
+			ResetDie(dice[i], topLeft
+				+ new Vector2(i % columns * spacing, i / columns * spacing));
 	}
 
 	/// <summary>
@@ -708,7 +743,8 @@ public partial class GameManager : Node2D
 		die.CancelDragging();
 		// Whatever state it was left in: a respawn is meant to un-stick things.
 		die.Freeze = false;
-		die.TeleportTo(position);
+		// Clamped per die, because each shape sits at its own offset from its origin.
+		die.TeleportTo(ClampInto(OriginBoundsFor(die), position));
 	}
 
 	/// Detach the mouse pin and undo the extra damping the single drag applies.

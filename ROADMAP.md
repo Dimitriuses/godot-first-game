@@ -3,9 +3,12 @@
 This started as a first look at Godot 4 and stopped at "the die works". The board underneath
 it was drawn for a board game that was never wired up — and **as of August 2026 it never will
 be.** The project is a dice-rolling sandbox: throw dice, watch them tumble, read the numbers.
-No players, no turns, no win condition. Items 3 and 4 are dropped for that reason. Two large
-pieces of work remain, both planned rather than started: **item 8**, adding the rest of the
-dice from the source pack, and **item 9**, getting a playable build onto GitHub Pages.
+No players, no turns, no win condition. Items 3 and 4 are dropped for that reason. Item 8,
+adding the rest of the dice from the source pack, is **done** — all eight ship. One large
+piece of work remains, planned rather than started: **item 9**, getting a playable build onto
+GitHub Pages. What stands in its way is listed in
+[KNOWNISSUES](KNOWNISSUES.md) section 9, and the payload question there wants deciding before
+anyone starts.
 
 ## 1. Make the physics decide the number — partly addressed, still open
 

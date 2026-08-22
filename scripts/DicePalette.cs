@@ -85,7 +85,12 @@ public partial class DicePalette : Control
 		dragPreview?.QueueFree();
 		dragPreview = null;
 
-		if (mouse.X > DrawerLeft + DrawerWidth && draggingScene != null)
+		// Ask what is under the pointer, rather than assuming the drawer's width is a
+		// no-go strip. It was: every drop left of x=255 was refused at any height, which
+		// is a fifth of the board's width, whether or not a panel was actually there and
+		// whether or not the die list below it was even open. This covers the drawer, the
+		// list and the corner buttons at once, and only where they really are.
+		if (GetViewport().GuiGetHoveredControl() == null && draggingScene != null)
 			EmitSignal(SignalName.SpawnRequested, draggingScene, mouse,
 				draggingSlot >= 0 ? slotThemes[draggingSlot] : DiceTheme.Bone);
 		draggingScene = null;

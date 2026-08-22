@@ -183,7 +183,13 @@ consequences, all of which have bitten:
 
 - A click on the palette or the die list reaches `GameManager._Input` too, so anything acting
   on "a click on the board" has to ask `GetViewport().GuiGetHoveredControl()` first — without
-  it, placing a copy drops a die behind whichever panel was clicked.
+  it, placing a copy drops a die behind whichever panel was clicked. **That includes the
+  palette's own drop.** It used to test the release against the drawer's *width*, which
+  refused a fifth of the board at any height whether a panel was there or not, and allowed
+  drops onto the corner buttons at the far side. Ask the GUI, never the geometry: the answer
+  follows the panels when they move, open and shut with them, and needs no second copy of
+  where anything is. It is reliable mid-drag — the pressed button does not hold the hover
+  once the pointer is over the board.
 - A press on the die menu must be left alone entirely: closing the panel on the press means
   the button never sees the release and no item ever fires.
 - **Both right-click menus open from `_Input`, not from the die.** Which one to show
