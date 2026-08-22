@@ -6,6 +6,14 @@ behaviour and fixed none of it; the August 2026 work on the dice did fix several
 are struck through or marked *fixed* in place rather than deleted, so the record of what was
 wrong survives.
 
+This is the **only** list. `README.md` used to carry an abbreviated copy of it, which is the
+kind of thing that quietly goes out of date; it now points here instead.
+
+Re-audited against the build in August 2026, before the web deploy was planned. Everything
+still marked open below was re-checked at that point rather than assumed — including which
+of the eight die scenes carry the fixes, since seven of them were generated after the fixes
+were written.
+
 ---
 
 ## 1. The die's number is not decided by the physics — still true, but softened
@@ -41,9 +49,10 @@ die on the board with its current value and a running **Total**. `GameManager.On
 updates it from the `DiceRolled` signal, so the number survives into an exported build.
 `GD.Print("Rolled: " + result)` is still there alongside it.
 
-**The `Label` this item was written about is still in `game.tscn` and still unused** — at
-(1075, 582), fetched by nothing. The HUD was built instead of binding it, because one label
-cannot show eight dice. It is dead scene furniture; delete it or repurpose it.
+~~**The `Label` this item was written about is still in `game.tscn` and still unused**~~ —
+**removed, August 2026.** It sat at (1075, 582) and was fetched by nothing; the HUD had been
+built instead of binding it, because one label cannot show eight dice. Deleting it changed
+`docs/screenshot.png` not at all, which is the proof it was drawing nothing.
 
 ## 3. The die can roll itself — fixed
 
@@ -123,6 +132,29 @@ Three of those columns are worth reading carefully:
   detection band, which at 60 Hz predicts leaking above ~12,780 px/s. Escapes actually start
   at **8,000 px/s**, so the practical threshold is lower and more reachable than the arithmetic
   suggests. Worth remembering before trusting a similar calculation elsewhere.
+
+### It applies to all eight dice, not just the d6 — measured, August 2026
+
+The fix landed on `dice.tscn` when that was the only die. The other seven scenes were
+generated afterwards by `tools/dice-render/make_scene.py`, so whether they inherited it is a
+real question, and grepping for the property name is not an answer.
+
+All eight carry `continuous_cd = 1` and `center_of_mass_mode = 1`. (Grepping for
+`center_of_mass = Vector2(0, 0)` finds **nothing**, which looks alarming and is not: Godot
+omits a property sitting at its default when it saves a scene, and the default is the
+`(0, 0)` that was wanted.)
+
+Then the behaviour, rather than the file: every die fired at the board from the centre, eight
+directions each, at two speeds, measuring how far outside the wall face it ever reached.
+
+| speed | shots | escapes | worst excursion |
+|---|---|---|---|
+| 20,000 px/s | 64 | **0** | 0.0 px |
+| 60,000 px/s | 64 | **0** | 30.2 px |
+
+30 px of momentary penetration at 60,000 px/s is the collider being pushed back out within
+the step, against a 149 px wall — nowhere near leaving. The template is what carries this, so
+a ninth die would get it too, but re-measure rather than trust if the generator is rewritten.
 
 ### What this does not change
 
@@ -209,14 +241,34 @@ message is gone. A guard on `IsQueuedForDeletion()` would make the intent explic
 was wrong. It came from measuring only idle sessions with no input — the die never moves on
 its own, so it never left the area. The bug needs someone to actually throw the die.*
 
-## 5. `BodySetState` needs the freeze dance around it
+## 5. ~~`BodySetState` needs the freeze dance around it~~ — re-measured and replaced
 
-`OnSpawnButton` freezes the body, teleports it via
-`PhysicsServer2D.BodySetState(..., BodyState.Transform, ...)`, then unfreezes. That looks
-like superstition; it is not. Calling `BodySetState` **without** the freeze/unfreeze on a
-resting body was measured to have no effect at all — the die stayed where it was. With the
-freeze dance, a die displaced to (852.5, 531.1) returns to exactly (694, 432). Leave it
-alone.
+This used to say the freeze/unfreeze around `PhysicsServer2D.BodySetState` looked like
+superstition and was not, because bare `BodySetState` on a resting body had been measured to
+do nothing at all.
+
+**That no longer reproduces.** Re-measured in August 2026 on dice that had genuinely fallen
+asleep (asserted, not assumed), moving each from (500, 300) to (800, 450) and reading back
+the error:
+
+| how | awake | asleep |
+|---|---|---|
+| freeze / `BodySetState` / unfreeze | 0.0 px | 0.0 px |
+| **`GlobalPosition = ...`** | **341.8 px** | **341.8 px** |
+| `BodySetState`, no freeze | 0.0 px | 0.0 px |
+| `_IntegrateForces` + `state.Transform` | 0.0 px | 0.0 px |
+
+Three of the four work; only assigning `GlobalPosition` fails, and it fails completely —
+the die does not move at all, awake or asleep. Whatever made the bare call fail when the
+original note was written is gone, and the dance was load-bearing for nobody.
+
+`ResetDie` now calls **`Dice.TeleportTo`**, which applies the move from inside
+`_IntegrateForces` and clears both velocities with it. That is the engine's own documented
+answer to moving a rigid body, it needs no freeze, and it keeps the knowledge of how a die
+moves inside `Dice` rather than in the board reaching past the node into the physics server.
+
+**What has not changed: do not assign `GlobalPosition` to move a die.** That is still the
+one approach that silently does nothing.
 
 ## 6. Smaller things
 
@@ -237,7 +289,18 @@ alone.
   historical.
 - **The export preset uses `export_filter="all_resources"`**, so every file under `assets/`
   ships in the binary whether a scene uses it or not. That was 12.8 MB of unreferenced
-  Kenney artwork until the July 2026 cleanup.
+  Kenney artwork until the July 2026 cleanup. It matters again now for a different reason:
+  `assets/dice/` is **47 MB**, and all of it would go into a browser download. See item 8.
+- ~~**`scenes/Player.tscn`, `scripts/Player.cs` and the two Kenney sprites are dead
+  weight.**~~ **Deleted, August 2026**, along with `assets/kenney-boardgame/` entirely. The
+  board game they belonged to was dropped (ROADMAP 3); nothing referenced `Player.tscn`, and
+  `Player.tscn` was the only thing referencing `piece-black-border04.png`. `docs/screenshot.png`
+  is byte-identical afterwards. `assets/petixel-prototype/` stays — `game.tscn` draws the
+  board and the figures from it.
+- **Nothing moves until you touch it.** Gravity is disabled — it is a top-down board — and
+  nothing animates on its own, so the opening scene is completely static. Measured in July
+  2026 as 1,800 consecutive byte-identical rendered frames; the mechanism has not changed
+  since, though the frame count has not been re-measured.
 - ~~**The die artwork is 18.6 MB**~~ — eight 5120×5120 spritesheets for one six-sided die,
   at four times the resolution it was drawn at. Fixed in August 2026 by re-rendering the
   animation at 128px cells drawn at 1:1: 3.9 MB for the same on-screen result, and a CC0
@@ -250,17 +313,54 @@ August 2026 is that there is now a *repeatable way* to test, and the argument fo
 bothering has weakened.
 
 The old argument was that ~160 lines of engine glue with no pure logic is not worth pinning.
-The gameplay code is now ~940 lines across five scripts and includes a real state machine
-(`Dice`: resting / held / rolling), which is exactly the kind of thing that breaks silently
-— and did, twice, before it was fixed.
+The gameplay code is now **~4,160 lines across twelve scripts** and includes a real state
+machine (`Dice`: resting / held / rolling), a save format, an audio mixer and a shader — the
+kind of thing that breaks silently, and has, repeatedly.
+
+The throwaway harnesses have earned their keep since: they are what caught the die list
+claiming deleted dice, the delete cross vanishing under the cursor, `body_entered` reporting
+post-impact velocity so every collision was inaudible, `SpawnDie` ignoring the theme it was
+handed, the copy's arrival animation being killed by `PlaceOnFace`, and dice spawning twelve
+pixels below the cursor. Every one of those was found by a harness that was then deleted.
 
 Godot runs headless and the .NET build runs C# in that mode, so a throwaway `Node` scene
 driven by `await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame)` can step the die
 through pickup, spin-up, release and landing and assert on `AnimatedSprite2D.Animation`,
-`.Frame` and `.IsPlaying()`. Twenty such checks were used to verify the August 2026 dice
-rewrite and all passed; the harness was deleted afterwards rather than committed. The recipe
-is written up in [CLAUDE.md](CLAUDE.md).
+`.Frame` and `.IsPlaying()`. Twenty such checks verified the August 2026 dice rewrite; later
+features ran 8 to 34 apiece. Every harness was deleted afterwards rather than committed. The
+recipe, and the traps that cost a run each, are written up in [CLAUDE.md](CLAUDE.md).
 
-Making that permanent is the cheapest real improvement available to this repository, and
-item 1 above (read the up-face from the body's orientation) is a pure function that would
-need no harness at all.
+Making that permanent is the cheapest real improvement available to this repository. Note
+that it is also a prerequisite for the web port (ROADMAP 9d): the C# tree and the GDScript
+tree will drift the moment either changes, and the harness is the only thing that could tell
+you they had.
+
+---
+
+## 8. Before a web deploy — what is not ready
+
+The browser build is [ROADMAP](ROADMAP.md) item 9. None of the following is a bug in the
+game; they are the things that stand between it and a Pages URL, listed here so that
+"is it ready?" has one answer.
+
+- **C# cannot be exported to the web at all.** Re-checked in August 2026 by adding a Web
+  preset and running the export: Godot refuses before it starts, with *"Export to Web is
+  currently not supported in Godot 4 when using C#/.NET."* This is the blocker, and the
+  reason item 9 is a hand-written GDScript port rather than a build setting.
+- **47 MB of dice artwork would go into the download.** `export_filter="all_resources"`
+  ships everything under `assets/`, and `assets/dice/` alone is 47 MB across eight dice.
+  That is fine for a desktop binary and not fine for a browser. ROADMAP 8 costs out the
+  options — fewer dice, shorter clips, or a shared-prefix animation redesign — and none of
+  them has been done. **Decide this before deploying, not after.**
+- **The save has never been run in a browser.** `user://` maps to IndexedDB in a web export,
+  which is why the save was written with plain `FileAccess` and no JavaScript, but that path
+  has only been exercised on a desktop. The flush happens when the file is closed.
+- **Shake-to-throw will not work in a browser as written.** Godot's web platform does not
+  implement the sensor APIs, so `Input.GetAccelerometer()` returns zero there.
+  `ShakeGesture` is fed samples rather than polling precisely so the port can hand it values
+  from the DOM's `devicemotion` event — see ROADMAP 9b-touch, including the iOS permission
+  gesture that has to go with it.
+- **Touch has not been tried on a device.** The double-tap menu and the group-drag toggle
+  are covered by harnesses driving real `InputEventScreenTouch` events, and the scene scales
+  to any window, but nobody has held a phone and used it. Feel — tap targets, whether a
+  double-tap conflicts with a quick double-throw — cannot be settled headless.

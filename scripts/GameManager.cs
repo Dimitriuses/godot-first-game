@@ -694,15 +694,21 @@ public partial class GameManager : Node2D
 			ResetDie(dice[i], spawnPosition + new Vector2((i % 4) * 54f, (i / 4) * 54f));
 	}
 
+	/// <summary>
+	/// Put a die back where it started, however it got to where it is.
+	///
+	/// `Dice.TeleportTo` applies the move from inside `_IntegrateForces`, which is the
+	/// engine's own answer to moving a rigid body and clears the velocities with it. This
+	/// used to freeze the body, reach past the node into `PhysicsServer2D.BodySetState`
+	/// and unfreeze again — see KNOWNISSUES 5, where the dance is re-measured and no
+	/// longer needed.
+	/// </summary>
 	private void ResetDie(Dice die, Vector2 position)
 	{
-		die.Freeze = true;
-		die.LinearVelocity = Vector2.Zero;
-		die.AngularVelocity = 0;
-		PhysicsServer2D.BodySetState(die.GetRid(), PhysicsServer2D.BodyState.Transform,
-			new Transform2D(0, position));
-		die.Freeze = false;
 		die.CancelDragging();
+		// Whatever state it was left in: a respawn is meant to un-stick things.
+		die.Freeze = false;
+		die.TeleportTo(position);
 	}
 
 	/// Detach the mouse pin and undo the extra damping the single drag applies.

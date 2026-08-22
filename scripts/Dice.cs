@@ -72,6 +72,7 @@ public partial class Dice : RigidBody2D
 	private float moveSpeed;
 	private Vector2 lastVelocity;
 	private Vector2 lastPosition;
+	private Vector2? teleportTo;
 	private ulong lastCollisionRollMs;
 
 	/// <summary>
@@ -240,6 +241,31 @@ public partial class Dice : RigidBody2D
 		MaxContactsReported = 4;
 		BodyEntered += OnBodyEntered;
 		lastPosition = GlobalPosition;
+	}
+
+	/// <summary>
+	/// Put the die somewhere, immediately, without going through the solver.
+	///
+	/// The engine's own answer to "how do I move a rigid body": the transform is applied
+	/// from inside `_IntegrateForces`, which is the one moment the physics server is
+	/// willing to be told where a body is. Assigning `GlobalPosition` fights the solver,
+	/// and a settled body ignores it.
+	/// </summary>
+	public void TeleportTo(Vector2 position)
+	{
+		teleportTo = position;
+		// A sleeping body is never integrated, so it would never see the request.
+		Sleeping = false;
+	}
+
+	public override void _IntegrateForces(PhysicsDirectBodyState2D state)
+	{
+		if (teleportTo is not Vector2 target)
+			return;
+		state.Transform = new Transform2D(0f, target);
+		state.LinearVelocity = Vector2.Zero;
+		state.AngularVelocity = 0f;
+		teleportTo = null;
 	}
 
 	public override void _PhysicsProcess(double delta)

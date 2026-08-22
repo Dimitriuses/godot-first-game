@@ -735,8 +735,19 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 
 ### 9a. The port
 
-About 940 lines across five scripts, of which `Player.cs` is dead already (item 3), so four
-scripts really. A day's work, roughly.
+**Re-counted August 2026: about 4,160 lines across twelve scripts**, of which `Player.cs`
+(13 lines) is dead already (item 3). The old estimate here said 940 lines across five and
+"a day's work, roughly"; that was written before the dice pack, the right-click menus, the
+themes, the audio, the save file and the touch controls. It is several days now, and the
+estimate is the thing most likely to be wrong again by the time anyone starts — **re-count
+before planning.**
+
+`shaders/dice_theme.gdshader` is not in that total and does not need porting: `.gdshader`
+is language-agnostic and crosses over verbatim.
+
+The largest single file is `GameManager.cs` at 1,269 lines, which is where most of the risk
+is. `Dice.cs` (628) is the other one that matters, because it is a state machine whose
+transitions are load-bearing — see KNOWNISSUES 3.
 
 It lives in `web/`, committed. What must **not** be committed is a second copy of `assets/`:
 Godot roots `res://` at `project.godot`, so the GDScript project needs the assets inside its

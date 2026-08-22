@@ -92,9 +92,10 @@ run of `game.tscn` starts clean with no errors or warnings. The dice state machi
 checked by 20 assertions driven headlessly — see [CLAUDE.md](CLAUDE.md).
 
 It is **a dice sandbox and nothing more**, by decision rather than by omission. The board art
-is a board game's board, and a `Player` script and a ring of eight cell coordinates survive in
-the history to prove that was once the plan — but that plan was dropped in August 2026. Throw
-dice, watch them tumble, read the numbers. See [ROADMAP.md](ROADMAP.md) items 3 and 4.
+is a board game's board, and a ring of eight cell coordinates in `game.tscn` survives to prove
+that was once the plan — the `Player` script and scene that went with it were deleted once the
+plan was dropped in August 2026. Throw dice, watch them tumble, read the numbers. See
+[ROADMAP.md](ROADMAP.md) items 3 and 4.
 
 **The number is no longer a bare random draw**, though it is not physical either. It is
 taken from the frame of the tumble the die was let go on, nudged by a random factor: the idle
@@ -135,7 +136,7 @@ not drift — [ROADMAP.md](ROADMAP.md) item 9, the largest piece of work left.
 ## Layout
 
 ```
-scenes/     game.tscn (board, walls, bounds area, UI), dice.tscn, Player.tscn
+scenes/     game.tscn (board, walls, bounds area, UI), and one scene per die
 scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Dice.cs          roll result + face animations
             DicePalette.cs   left-side drag-to-spawn dice menu
@@ -145,16 +146,19 @@ scripts/    GameManager.cs   drag/release, respawn, bounds, copy placement
             Sfx.cs           the voice pool, and how often a sound may repeat
             MuteButton.cs    the speaker in the corner, icon drawn rather than typed
             SaveGame.cs      the one save file, read and written
-            Player.cs        board-piece stub, unused (board game dropped)
+            GroupDragButton.cs  toggles the Shift group drag, for touchscreens
+            ShakeGesture.cs  decides what counts as shaking the device
+            UiSkin.cs        the look and placement of the corner buttons
 shaders/    dice_theme.gdshader  recolours a die without re-rendering it
-assets/     audio/           seventeen synthesised sound effects
 assets/     dice/            die animation frames, a folder per die:
                              d4 d6 d6n d8 d10 d10p d12 d20
                              (see docs/ASSETS.md)
+            audio/           seventeen synthesised sound effects
             petixel-prototype/  tileset and figures
-            kenney-boardgame/   chip and piece sprites (CC0)
 tools/      dice-render/     offline Blender pipeline that produces assets/dice/
             screenshots/     regenerates the two images below, deterministically
+            audio-render/    synthesises assets/audio/ from nothing
+            theme-lab/       compares the die-recolour shader's modes by eye
 docs/       screenshot.png and roll.gif (both generated), asset provenance
 ```
 
@@ -162,48 +166,26 @@ The gameplay and runtime UI are implemented in C#.
 
 ## Known limitations
 
-Everything here was reproduced by running the project, not inferred from reading it.
+Kept in one place rather than two: **[KNOWNISSUES.md](KNOWNISSUES.md)** — every entry
+reproduced by running the project, with the measurements, and with the fixed ones struck
+through in place rather than deleted so the record of what was wrong survives.
 
-- **The result is still not physical**, though no longer a bare draw: it comes from the
-  tumble frame the die was released on plus a random factor. It is not read off where the
-  die actually stops. See [ROADMAP.md](ROADMAP.md) item 1.
-- ~~**The result is invisible in-game.**~~ Fixed: `DiceHud` lists every die with its value
-  and a running total. The spare `Label` in `game.tscn` is still unused, though — the HUD
-  was built instead of binding it.
-- ~~**The die can re-roll itself.**~~ Fixed: `idle0`/`idle1` now play **only while a die is
-  held**, so a free die is never left in an idle state for anything to observe and act on.
-  Rolls start from exactly three places: releasing a die you spun, a hard enough die-to-die
-  collision, and Space.
-- ~~**The die tunnels through the walls on fast throws.**~~ Fixed in August 2026 by enabling
-  continuous collision detection (`continuous_cd`, off by default in Godot). Measured: dice
-  started escaping at 8,000 px/s and now survive 400,000 px/s, with ordinary throws unchanged
-  to the pixel. The out-of-bounds recovery stays, and no longer has anything to recover from.
-- ~~**Dragging could push dice out of the board.**~~ Fixed at the same time. The mouse pin is
-  clamped to the playable rectangle, which is derived from the wall colliders rather than
-  hardcoded, so a cursor dragged off-board leaves the die resting against the wall instead of
-  hauling it 421px through. Shift-dragging no longer freezes and teleports dice either — they
-  are steered, and gathered into a clump at the cursor rather than holding the arrangement
-  they were picked up in, so a pile against a wall settles instead of straining to get out.
-- **`BodyExited` still fires once during scene teardown**, on the same frame as `_ExitTree`,
-  where the deferred recentre can never be flushed. It is now silent — the handler prints
-  nothing, so it no longer muddies the console — but the event is still unguarded.
-- **Nothing moves until you touch it.** Gravity is disabled (top-down board), so the opening
-  scene is completely static: 1,800 consecutive rendered frames are byte-identical.
-- **The board game was dropped**, so `Player.cs`, `scenes/Player.tscn` and the two Kenney
-  piece sprites are dead weight kept for now. See [ROADMAP.md](ROADMAP.md) item 3.
-- **No tests, no CI.** Nothing is committed. Each change to the die has been verified with a
-  throwaway headless harness — 21 checks on the current build — that is then deleted. The
-  recipe is in [CLAUDE.md](CLAUDE.md), and making it permanent is the cheapest real
-  improvement available here.
-- ~~**Console output is in Ukrainian.**~~ No longer true: there is no non-ASCII text left in
-  `scripts/`, and the one remaining `GD.Print` is `"Rolled: " + result`.
-- ~~**`CollisionShape2D` was scaled 6×.**~~ Fixed: the die now uses an unscaled 32 px-radius
-  collider that follows the visible body more closely.
-- ~~**The die artwork is third-party with unknown terms.**~~ Fixed in August 2026: the
-  animation was re-rendered from a CC0 model — see [docs/ASSETS.md](docs/ASSETS.md).
+The short version. Still open:
 
-`KNOWNISSUES.md` carries the same list with the measurements; `ROADMAP.md` records where the
-project is heading.
+- **The result is not physical.** It comes from the tumble frame the die was released on
+  plus a random factor, not from where the die actually stops ([ROADMAP.md](ROADMAP.md)
+  item 1).
+- **`BodyExited` fires once during scene teardown**, where its deferred recentre can never
+  be flushed. Silent and harmless, still unguarded.
+- **Nothing is committed as a test.** Every change is verified with a throwaway headless
+  harness that is then deleted; the recipe is in [CLAUDE.md](CLAUDE.md).
+- **A browser build is not ready** — C# cannot be web-exported at all, and 47 MB of dice
+  artwork would go into the download. KNOWNISSUES 8 lists what stands in the way.
+
+Fixed, and worth knowing were once true: the die used to draw its number from
+`System.Random`, roll itself unprompted, tunnel through the walls above 8,000 px/s, and be
+dragged straight out of the board; the artwork was 18.6 MB of third-party sprites with
+unknown terms. All measured, all fixed, all recorded.
 
 ## History
 

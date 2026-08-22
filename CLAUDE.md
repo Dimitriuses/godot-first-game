@@ -305,8 +305,13 @@ why. Do not rebuild it without reading that first.
 - **A frozen `RigidBody2D` reports no velocity.** The Shift group-drag sets `Freeze = true`
   and moves dice by assigning `GlobalPosition`, so anything reading `LinearVelocity` sees
   zero. `Dice` measures its own position delta instead, which works for both drag styles.
-- **`PhysicsServer2D.BodySetState` needs the freeze/unfreeze dance around it** or it silently
-  does nothing on a resting body. This is measured, not superstition — KNOWNISSUES 5.
+- **Move a die with `Dice.TeleportTo`, never by assigning `GlobalPosition`.** The assignment
+  silently does nothing — measured at 341.8px of error on a die that never moved, asleep or
+  awake. `TeleportTo` applies the transform from inside `_IntegrateForces`, which is the one
+  moment the physics server accepts being told where a body is, and clears both velocities
+  with it. The old freeze / `PhysicsServer2D.BodySetState` / unfreeze dance is gone: it was
+  re-measured in August 2026 and the bare call works fine now, so the dance was guarding
+  nothing. KNOWNISSUES 5 has the table.
 - **Teleporting a die registers as a hard contact.** `freeze_mode` is Kinematic, so moving a
   frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
   and the collision re-roll starts a clip. Anything that repositions dice should switch

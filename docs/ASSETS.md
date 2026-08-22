@@ -18,7 +18,7 @@ attribution owed. That was most of the reason for doing it this way. Two runs of
 produce byte-identical files, so the committed WAVs can be checked against their source at
 any time by re-running it.
 
-## `assets/kenney-boardgame/` — CC0, no restrictions
+## ~~`assets/kenney-boardgame/`~~ — removed, August 2026
 
 | File | Source | Used by |
 |---|---|---|
@@ -37,6 +37,13 @@ The pack's own licence file ships alongside them as `LICENSE.txt`:
 > commercial projects. Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
 
 Credit is given here voluntarily. **Thanks to Kenney.**
+
+**Both files, the licence and the folder have now been deleted**, along with
+`scenes/Player.tscn` and `scripts/Player.cs`, the last things referencing them. The section
+is kept rather than removed because knowing what a repository *used* to ship is part of
+knowing where its assets came from. Nothing CC0 is left in the tree; everything under
+`assets/` is now either generated here (`dice/`, `audio/`) or `petixel-prototype/`, whose
+origin is discussed below.
 
 A second Kenney pack, *Board Game Icons (1.1)* (also CC0), was committed to this repository
 in 2025 and has been removed — not one of its 1,543 files was referenced by any scene.
