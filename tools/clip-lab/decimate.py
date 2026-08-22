@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image
 
 CELL = 128
+COLS = 10           # dice_config's `cols`, shared by a die's roll and idle sheets
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 OUT = os.path.join(os.path.dirname(__file__), "out", "decimated")
 
@@ -65,8 +66,15 @@ def pick(total, keep, plan="eased", power=1.3):
     return sorted(set(int(round((total - 1) * (1 - (1 - x) ** power))) for x in t))
 
 
-def write_sheet(frames, path):
-    cols = int(np.ceil(np.sqrt(len(frames))))
+def write_sheet(frames, path, cols=COLS):
+    """One sheet, laid out in the column count the render pipeline uses.
+
+    It has to be `cols`, not something square: `dice_config` carries a single `cols` for
+    every animation of a die, so a roll sheet in a different grid from the idle sheets
+    beside it makes `make_scene.py` refuse the whole die. Square sheets were free while
+    this only wrote into `out/` as a prototype; they stopped being free the moment the
+    output became installable.
+    """
     rows = int(np.ceil(len(frames) / cols))
     out = Image.new("RGBA", (cols * CELL, rows * CELL), (0, 0, 0, 0))
     for i, frame in enumerate(frames):
@@ -92,7 +100,16 @@ def main():
     ap.add_argument("--frames", type=int, default=61)
     ap.add_argument("--source-frames", type=int, default=91)
     ap.add_argument("--plan", choices=["eased", "uniform"], default="eased")
+    ap.add_argument("--cols", type=int, default=COLS,
+                    help="cells per sheet row; must match dice_config's cols")
+    ap.add_argument("--install", action="store_true",
+                    help="write into assets/dice/<die>/ instead of out/decimated/<die>/")
     args = ap.parse_args()
+
+    # Installing replaces the sheets a committed scene addresses, and the scene's atlas
+    # regions still describe the old grid: the die is broken until make_scene.py is re-run.
+    target = (os.path.join(ROOT, "assets", "dice", args.die) if args.install
+              else os.path.join(OUT, args.die))
 
     keep = pick(args.source_frames, args.frames, args.plan)
     print(f"{args.die}: {args.source_frames} -> {len(keep)} frames per clip "
@@ -105,9 +122,11 @@ def main():
     for face in faces_of(args.die):
         src = sheet_path(args.die, face)
         frames = read_frames(src, args.source_frames)
-        size = write_sheet([frames[i] for i in keep],
-                           os.path.join(OUT, args.die, f"{face}_sprites.png"))
+        # Before the write, not after: --install overwrites the source, so measuring it
+        # afterwards compares the new sheet with itself and reports a saving of nothing.
         was = os.path.getsize(src)
+        size = write_sheet([frames[i] for i in keep],
+                           os.path.join(target, f"{face}_sprites.png"), args.cols)
         before += was
         after += size
         print(f"{face:>6}{was / 1024:>12.0f}{size / 1024:>11.0f}"
@@ -119,7 +138,10 @@ def main():
           f"{args.frames / 30:.2f}s against {args.source_frames / 30:.2f}s.")
     print("Either the throw gets shorter, or the clip plays slower and each step gets")
     print("bigger. The prototype scene shows both.")
-    print(f"\nwritten to {os.path.normpath(os.path.join(OUT, args.die))}")
+    print(f"\nwritten to {os.path.normpath(target)}")
+    if args.install:
+        print(f"now set roll_frames={len(keep)} in dice_config.py, then run "
+              f"`python tools/dice-render/make_scene.py {args.die} --write`")
     return 0
 
 

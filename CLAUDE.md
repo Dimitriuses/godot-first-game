@@ -270,8 +270,8 @@ byte-identical and there is nothing to clean up by hand.
 Not from a bare `System.Random` draw, and not from the physics either. `Dice.Roll()` reads
 the frame of the idle tumble on screen when it is called, maps it onto a face (the 30-frame
 idle loop covers every face across its length), and applies a random offset of up to
-`ResultJitter`. The roll clip then resumes from that same frame, so the tumble carries over
-rather than cutting.
+`ResultJitter`. The roll clip then resumes from the matching point in its own opening
+tumble, so the throw carries on rather than cutting.
 
 The position read is `Frame + FrameProgress`, deliberately — a continuous position divides
 evenly over any face count, where the bare frame index only happened to divide evenly for
@@ -299,7 +299,8 @@ why. Do not rebuild it without reading that first.
   loaded resumes mid-way. `Dice.Roll()` therefore plays first and sets `Frame = 0` after.
 - **Setting `Frame` clears `FrameProgress`,** so set them in that order.
 - **The dice sheets import as lossy WebP, except the d6's.** `compress/mode=1` at quality
-  0.85 in the `.import` files halves the download — 32.62 MB to 16.29 MB — for no memory
+  0.85 in the `.import` files halves the download — it was 32.62 MB, and with the clips cut
+  to 60 frames as well the pack now imports to **11.07 MB** — for no memory
   cost, because the GPU format is `Rgba8` either way. The pipped d6 is exempt: WebP
   subsamples chroma whatever the quality, and its red pip is the pack's one small saturated
   feature, so raising quality does not fix it (measured — the pip's error barely moves from
@@ -311,8 +312,10 @@ why. Do not rebuild it without reading that first.
 - **Every die scene is generated — do not hand-edit them.** `dice.tscn` (the pipped d6),
   `d20.tscn`, `d4.tscn`, `d6n.tscn`, `d8.tscn`, `d10.tscn`, `d10p.tscn` and `d12.tscn` each
   hold one `AtlasTexture` per frame:
-  606 for a d6, 1,880 for the d20. One roll clip of 91 frames per face and two idle loops of
-  30, all at 30 fps, played by name from `Dice.cs`. Change
+  420 for a d6, 1,260 for the d20. One roll clip of 60 frames per face and two idle loops of
+  30, all at 30 fps, played by name from `Dice.cs`. The roll clips were rendered at 91 and
+  thinned to 60 — see the `TumbleFrames` note below, which is the one piece of game code
+  that had to be told. Change
   `tools/dice-render/dice_config.py` and run
   `python tools/dice-render/make_scene.py d6 --write`. Running it *without* `--write`
   compares against what is committed, which is the quick way to check nothing has drifted.
@@ -332,6 +335,18 @@ why. Do not rebuild it without reading that first.
   frozen body by assigning `GlobalPosition` gives it an implied velocity, `BodyEntered` fires
   and the collision re-roll starts a clip. Anything that repositions dice should switch
   `ContactMonitor` off first — the screenshot tool does, after this cost it determinism twice.
+- **`Dice.TumbleFrames` is how the idle loop and a landing clip line up, and it used to
+  need no telling.** Both were rendered at 30 fps from one motion, so a landing clip's
+  first thirty frames simply *were* the idle loop and `Roll()` carried the frame index
+  straight across. Thinning the landing clips to 60 frames broke that identity, because
+  the eased plan takes most of its saving out of the blur — those thirty frames survive as
+  sixteen. Left as it was, a die released late in its tumble began its roll at original
+  frame 52, past the point the face becomes readable, and settled in 1.03 s instead of
+  2.07 s: it visibly snapped towards its answer the moment it was let go. `Roll()` now
+  scales the release position by `TumbleFrames`, which `make_scene.py` writes into a scene
+  only when it differs from the idle length — so an undecimated render still gets the old
+  1:1 and nothing else had to change. **Anything that changes how many frames a clip has
+  has to ask whether this number moved with it.**
 - **Every modifier needs a second way in, for touch.** A screen has no Shift to hold, so
   the group drag is a toggle button as well — and the click that starts a drag now reads
   `mouseButton.ShiftPressed || groupDrag` rather than `Input.IsKeyPressed(Key.Shift)`,
@@ -425,20 +440,22 @@ why. Do not rebuild it without reading that first.
   sound uses. The *re-roll* threshold beside it still reads `LinearVelocity`, deliberately:
   it was tuned against those numbers and changing it would change how the game plays.
 - **Loading a die's `PackedScene` loads its whole sheet set, instantly.** Not on
-  instantiation — on `GD.Load`. Measured: 180 MB of texture memory for the d20's scene
-  alone, and `game.tscn` used to hold all eight in an exported `Array[PackedScene]`, so
-  **727 MB was resident before a single die was thrown**. `SpriteFrames` holds an
+  instantiation — on `GD.Load`. Measured: 110 MB of texture memory for the d20's scene
+  alone (180 MB before the clips were cut to 60 frames), and `game.tscn` used to hold all
+  eight in an exported `Array[PackedScene]`, so **727 MB was resident before a single die
+  was thrown**. `SpriteFrames` holds an
   `AtlasTexture` per frame and each references its sheet; there is no partial load, and
   freeing the die does not give it back.
 
   So the pack is a **manifest of paths**, `assets/dice/pack.json`, and a scene is loaded
-  the first time a die of that kind is actually spawned. Startup is 79 MB. **Never put a
+  the first time a die of that kind is actually spawned. Startup is 58 MB, and all eight
+  kinds resident at once is 462 MB. **Never put a
   die scene in an exported property, and never instantiate one to ask it a question** —
   that was how the palette used to build its buttons, and it was the whole 727 MB. It
   draws from a 50 KB icon sheet now.
 - **A die's first load is hidden behind its own arrival animation.** A cold `GD.Load`
-  blocks for 188ms (d4) to 672ms (d20) — a freeze at the exact moment the player drops a
-  die. So `SpawnDie(path, ...)` starts `ResourceLoader.LoadThreadedRequest` and puts the
+  blocks for 115ms (d6) to 441ms (d20) — it was 672ms for the d20 before the clips
+  were cut — a freeze at the exact moment the player drops a die. So `SpawnDie(path, ...)` starts `ResourceLoader.LoadThreadedRequest` and puts the
   palette's **icon** down instead, playing the same Back-out curve `Dice.Appear` uses. The
   real die replaces it once **both** the load and the animation have finished; waiting for
   both is what makes the swap invisible, because by then the placeholder is sitting still
@@ -581,8 +598,8 @@ time** — a d20's sub-frames come to about 2.2 GB if they all exist at once. `-
 up an interrupted run. Budget about a minute per landing clip: 48 for a whole d20.
 `dice_render.ipynb` is the same thing with previews.
 
-All eight dice in the pack are rendered: 46.34 MB of sheets and 7,396 atlas regions
-(ROADMAP 8). Adding one is an entry in `dice_config.py`, its two
+All eight dice in the pack are rendered: 32.20 MB of sheets and 5,040 atlas regions
+(ROADMAP 8) — 46.34 MB and 7,396 before the roll clips were thinned from 91 frames to 60. Adding one is an entry in `dice_config.py`, its two
 tables, a run, and `python tools/dice-render/make_icons.py --write`, which regenerates the
 palette's icon sheet and `assets/dice/pack.json` — the manifest that *is* the pack. Nothing
 in `scenes/game.tscn` has to change any more. **No

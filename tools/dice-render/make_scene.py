@@ -102,7 +102,11 @@ def generate(cfg):
         + ('\nDieLabel = "%s"' % cfg["label"]
            if cfg["label"] != "d%d" % cfg["faces"] else "")
         # Likewise: only the percentile d10 is worth anything but one per face.
-        + ("\nValueStep = %d" % cfg["value_step"] if cfg["value_step"] != 1 else ""))
+        + ("\nValueStep = %d" % cfg["value_step"] if cfg["value_step"] != 1 else "")
+        # And likewise: 1:1 with the idle loop is what an undecimated render
+        # gives, so this appears only on a die whose clips have been thinned.
+        + ("\nTumbleFrames = %d" % cfg["tumble_frames"]
+           if cfg["tumble_frames"] != cfg["idle_frames"] else ""))
     body.append('[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]\n'
                 'sprite_frames = SubResource("SpriteFrames_0")\n'
                 'animation = &"1"\n'

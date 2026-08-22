@@ -40,6 +40,18 @@ public partial class Dice : RigidBody2D
 	/// which is printed in tens and whose "00" face is the tenth; 1 on everything else.
 	/// The stored result stays 1..FaceCount either way, because that is what names the
 	/// animation clips — this only changes the number the HUD is told.
+	/// How many frames of a landing clip cover one whole tumble — the same
+	/// motion the idle loop shows. Roll() resumes the landing at the point the
+	/// idle had reached, so it has to know how the two line up.
+	///
+	/// It used to need no telling: both clips were rendered at 30 fps from one
+	/// motion, so roll frame i simply *was* idle frame i and the index carried
+	/// straight over. Thinning the landing clips broke that identity, because
+	/// the plan takes most of its saving out of the blur — the thirty frames of
+	/// tumble now survive as sixteen. Left at the idle length it is the old
+	/// 1:1, which is what an undecimated render still wants.
+	[Export] public int TumbleFrames = 30;
+
 	[Export] public int ValueStep = 1;
 
 	/// What the palette calls this die. Empty means "work it out from the face count",
@@ -409,7 +421,17 @@ public partial class Dice : RigidBody2D
 		SpriteFrames frames = AnimatedSprite.SpriteFrames;
 		int start = 0;
 		if (releasePos >= 0f && frames != null && frames.HasAnimation(clip))
-			start = Mathf.Min((int)releasePos, frames.GetFrameCount(clip) - 1);
+		{
+			// releasePos is a position in the idle loop; scale it onto however many
+			// frames of this clip cover the same tumble. Read the idle length off the
+			// clip rather than assuming thirty, so a die rendered to another length
+			// still lands in its own blur instead of part way through its settle.
+			float idleLength = frames.HasAnimation(Idle0)
+				? frames.GetFrameCount(Idle0) : 30;
+			int tumble = Mathf.Min(TumbleFrames, frames.GetFrameCount(clip));
+			start = Mathf.Clamp(Mathf.RoundToInt(releasePos / idleLength * tumble),
+				0, frames.GetFrameCount(clip) - 1);
+		}
 
 		// Play first, then place the frame: Play() only rewinds when it actually
 		// changes clip, so rolling the same number twice would otherwise resume

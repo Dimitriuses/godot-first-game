@@ -168,7 +168,9 @@ solids. All eight are in the game:
 **76 faces in total.** That number was the whole problem, and 8a below is where it was faced.
 
 All of them shipped, at **46.34 MB** of PNGs and **7,396 atlas regions** — against 8a's
-estimate of 43.8 MB and 7,396 frames, made before any of it was rendered. The frame count was
+estimate of 43.8 MB and 7,396 frames, made before any of it was rendered. Both figures were
+then cut by thinning every roll clip from 91 frames to 60: **32.20 MB and 5,040 regions**,
+importing to 11.07 MB. See [tools/clip-lab/](tools/clip-lab/README.md). The frame count was
 arithmetic and had to be right; the size landing within 6% of a figure extrapolated from a
 single d6 was luckier than it deserved to be. Per die: d6 3.61, d20 11.85, d4 3.06, numbered
 d6 3.10, d8 4.73, d10 6.46, percentile d10 6.50, d12 7.03.
@@ -232,7 +234,7 @@ fast enough to hide it — so the handoff lands around frame 40 and the tails ru
 #### What the options actually cost
 
 > **Superseded by measurement, August 2026.** These were estimated before the pack was
-> rendered. [tools/clip-lab/](../tools/clip-lab/README.md) now measures the same options
+> rendered. [tools/clip-lab/](tools/clip-lab/README.md) now measures the same options
 > against the committed sheets, and the shared-prefix figure below is optimistic: it assumes
 > a handoff around frame 45–50, and the artwork stops hiding the face by frame 42. At a
 > handoff the pictures support (frame 30) it is **35.3 MB / 27%**, which is *worse* than

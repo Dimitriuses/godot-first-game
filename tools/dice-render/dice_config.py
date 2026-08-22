@@ -23,8 +23,15 @@ DEFAULTS = dict(
     cell=128,               # sprite cell, pixels
     cols=10,                # cells per sheet row
     fps=30.0,
-    roll_frames=91,         # one landing clip per face
+    roll_frames=60,         # one landing clip per face
     idle_frames=30,         # the two looping tumbles
+    # How many frames of a landing clip cover one whole tumble — the same motion the
+    # idle loop shows. `Dice.Roll` resumes the roll at the point the idle had reached,
+    # so it needs to know how the two line up. It used to need no telling: both were
+    # rendered at 30 fps from one motion, so roll frame i simply *was* idle frame i.
+    # Decimating the clips broke that identity, because the eased plan takes most of
+    # its saving out of the blur — 30 original frames now survive as 16.
+    tumble_frames=16,
     idles=("idle0", "idle1"),
 
     # RigidBody2D setup, mirroring what dice.tscn has always carried

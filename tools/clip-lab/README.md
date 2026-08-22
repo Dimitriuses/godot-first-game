@@ -94,7 +94,7 @@ the part with the answer in it, and slowing it down reads as the die hesitating.
 The prototype's join is visibly wrong, because it splices clips that were never meant to
 join — that is finding 1, not a bug in the prototype.
 
-## Cutting 91 frames to 61 — tried, August 2026
+## Cutting 91 frames to 61 — adopted, August 2026
 
 `decimate.py` rebuilds a die's clips with fewer frames by *selecting* frames that already
 exist. No Blender, no source model, no change to how the animation is drawn — which is what
@@ -140,13 +140,58 @@ is a gameplay one rather than a technical one:
 `out/cut61.gif` shows all three side by side at real speed — as shipped, cut, and cut but
 stretched. Watch it before deciding; the numbers cannot settle this one.
 
-### If it is adopted
+### Adopted — what it actually cost, across all eight dice
 
-Nothing in `scripts/` hardcodes 91 — `Dice` reads `SpriteFrames.GetFrameCount`, and so does
-the screenshot tool. The work is: run `decimate.py` for all eight dice, move the sheets into
-`assets/dice/`, and regenerate the scenes so the atlas regions match
-(`tools/dice-render/make_scene.py`). `tools/dice-render/validate.py` checks a scene against
-the sheets on disk and should be run afterwards.
+```sh
+for d in d4 d6 d6n d8 d10 d10p d12 d20; do
+    python tools/clip-lab/decimate.py $d --frames 61 --install
+done
+# then roll_frames=60 and tumble_frames=16 in dice_config.py, and per die:
+python tools/dice-render/make_scene.py $d --write
+python tools/dice-render/validate.py $d
+```
+
+| | before | after | |
+|---|---|---|---|
+| sheets on disk | 48.59 MB | **32.20 MB** | 34% |
+| imported, lossy (`.ctex`) | 16.29 MB | **11.07 MB** | 32% |
+| atlas regions | 7,396 | **5,040** | |
+| startup texture memory | 79.1 MB | **58.1 MB** | |
+| one d20 resident | 180.0 MB | **110.1 MB** | 39% |
+| all eight kinds resident | 727.0 MB | **461.8 MB** | 36% |
+| a d20's cold `GD.Load` | 672 ms | **441 ms** | |
+| a roll | 3.03 s | **2.00 s** | |
+
+Against the lossless 91-frame build the pack started at, the download is **32.62 MB →
+11.07 MB, a 66% cut**, from two independent changes that compose exactly as predicted.
+
+### One piece of game code had to be told
+
+`Dice.Roll()` reads how far the idle tumble had got and starts the landing clip at the
+matching point, so a thrown die carries its spin over instead of cutting. That worked by
+carrying the frame index straight across — and it worked because the two clips were an
+**identity**, both rendered at 30 fps from one motion, so landing frame *i* simply *was*
+idle frame *i*.
+
+Decimation breaks the identity, and silently: the eased plan takes most of its saving out
+of the blur, so the thirty frames of tumble survive as sixteen. Measured on the unfixed
+build, a release late in the idle loop:
+
+| released at | starts at new frame | = original frame | roll left |
+|---|---|---|---|
+| idle 0 | 0 | 0 | 2.00 s |
+| idle 21 | 21 | 37 | 1.30 s |
+| idle 29 | 29 | **52** | **1.03 s** |
+
+Original frame 52 is past frame 42, where the pictures above say the face is plainly
+readable — so a die let go at the end of its tumble started its roll already showing the
+answer, and settled in half the time. Not a rendering fault and not visible in any still.
+
+The fix is `Dice.TumbleFrames`, written into a scene by `make_scene.py` only when it
+differs from the idle length, so an undecimated die still gets the old 1:1 and no other
+call site changed. `Roll()` scales the release position by it; idle 29 now starts at
+frame 15 of 16 with 1.50 s left. The check is worth keeping: run it against
+`TumbleFrames = 30` and the last two rows fail.
 
 ## VRAM compression — measured, August 2026, and it is the wrong trade
 
@@ -218,7 +263,11 @@ files each `.import` points at:
 | | download | startup memory |
 |---|---|---|
 | lossless, as it was | 32.62 MB | 79.1 MB |
-| **lossy, as shipped** | **16.29 MB** | 79.1 MB |
+| **lossy** | **16.29 MB** | 79.1 MB |
+| lossy + clips cut to 60 frames | **11.07 MB** | 58.1 MB |
+
+(the second row is what this section measured; the third is that plus the frame cut below,
+and is what ships)
 
 **Half the download for nothing.** Memory does not move because the GPU format is `Rgba8`
 either way — WebP is a container decision, not a texture one, which is exactly what makes it
