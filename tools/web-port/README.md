@@ -76,30 +76,42 @@ dice.tscn: exported key(s) SpinSpeed are not [Export]s of Dice.
 Verify that guard still fires before trusting it; it is the only thing standing between
 a renamed C# export and a silently broken web build.
 
-## Progress
+## Progress — the port is complete
 
-| | C# lines | state |
+All twelve scripts are ported: **4,465 C# lines**, and `game.tscn` loads and runs in the
+GDScript tree. 29 checks pass across two harnesses.
+
+| | C# lines | |
 |---|---|---|
-| `dice.gd` | 680 | ported, 14 checks passing |
-| `sfx.gd` | 209 | ported |
-| `mute_button.gd` | 96 | ported |
-| `dice_theme.gd` | 92 | ported |
-| `save_game.gd` | 86 | ported — a transliteration; see below |
-| `group_drag_button.gd` | 83 | ported |
-| `shake_gesture.gd` | 70 | ported |
-| `ui_skin.gd` | 67 | ported |
-| `dice_menu.gd` | 398 | ported |
-| `dice_palette.gd` | 453 | **not started** |
-| `dice_hud.gd` | 700 | **not started** |
-| `game_manager.gd` | 1,531 | **not started** — most of the risk |
+| `game_manager.gd` | 1,531 | the board — drag, menus, spawn, link, save, shudder |
+| `dice_hud.gd` | 700 | the die list |
+| `dice.gd` | 680 | the die and its state machine |
+| `dice_palette.gd` | 453 | the drawer |
+| `dice_menu.gd` | 398 | the three right-click menus |
+| `sfx.gd` | 209 | |
+| `mute_button.gd` `dice_theme.gd` `save_game.gd` | 274 | |
+| `group_drag_button.gd` `shake_gesture.gd` `ui_skin.gd` | 220 | |
 
-**1,781 of 4,465 lines ported.** Re-counted August 2026: 4,465 across twelve scripts,
-against the 4,160 the ROADMAP recorded. It grew again between the estimate and the start,
-exactly as that entry warned.
+Re-counted August 2026 at 4,465 across twelve scripts, against the 4,160 the ROADMAP
+recorded — it grew again between the estimate and the start, exactly as that entry warned.
 
-`game_manager.gd` cannot be written before the three UI scripts it builds and wires: it
-references `DicePalette`, `DiceHud` and `DiceMenu` by type, so the file would not parse,
-and an unparsed 900-line port is not a port. That is the order — palette, list, board.
+Three things GDScript has not got, and how each was handled throughout:
+
+- **No method overloads.** C#'s three `SpawnDie` became `spawn_die` (by path — the one
+  everything outside the class should use, and the only one that keeps the pack lazy),
+  `spawn_die_at_slot` and `spawn_die_scene`.
+- **No tuples and no `HashSet`.** The pack is an Array of Dictionaries; `_deleting_dice`
+  is a Dictionary used as a set.
+- **No `load` as a method name.** `SaveGame.Load` became `load_board`, because `load` is
+  a GDScript built-in.
+
+Two traps worth knowing for anything ported later:
+
+- **`Control` already has `visible`.** `DiceHud`'s list of visible entries had to become
+  `_visible_entries`; shadowing it hides the panel and nothing says so.
+- **A lambda captures by value at connect time.** `DiceMenu`'s item handlers close over
+  the die the menu is *currently* open on, so they are named methods rather than lambdas —
+  a lambda would have frozen the die the menu was built with.
 
 `SaveGame` was the easiest file by a distance, and not by accident: the C# version was
 written against Godot's own `Json` and `Godot.Collections.Dictionary` rather than
@@ -149,14 +161,22 @@ the confirmation that the setting took.
 
 ## Parity
 
-`web/tests/dice_check.gd` drives the rewritten `dice.tscn` and asserts the same things
-the C# harness does. The numbers match exactly — a release at idle frames 0/7/14/21/29
-starts the roll at frames 0/4/7/11/15 in both trees — which is the check that matters,
-because that mapping is `TumbleFrames`, the one piece of game logic the clip decimation
-forced a change to.
+Two harnesses in `web/tests/`, both run by `check.py`:
 
-Still to build, per 9d: the screenshot diff, and CI running both gates as **failures**
-rather than warnings.
+- **`dice_check.gd`** drives the rewritten `dice.tscn`. Its numbers match the C# harness
+  exactly — a release at idle frames 0/7/14/21/29 starts the roll at frames 0/4/7/11/15 in
+  both trees. That mapping is `TumbleFrames`, the one piece of game logic the clip
+  decimation forced a change to, so it is the check most likely to catch a bad port.
+- **`board_check.gd`** builds `game.tscn` itself: the pack manifest, the board bounds off
+  the wall colliders, all five panels, a spawn landing where it was asked for, the die
+  list's per-type numbering, throw-all, the shudder moving the *view* and resetting, a
+  delete, and the save serialising with rounded positions.
+
+The second exists because the port's likely failures are silent. A signal connected to a
+renamed method, an export the rewriter missed, a panel that builds but wires nothing: none
+of them stop the scene loading, and several leave a board that looks right until touched.
+
+Still to build, per 9d: the screenshot diff between the two trees.
 
 ## Not yet proved: the export itself
 

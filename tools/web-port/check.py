@@ -59,6 +59,43 @@ def harnesses():
                   if n.endswith(".tscn"))
 
 
+def parse_check(godot):
+    """Parse every script explicitly. Returns the number that failed.
+
+    **The import step is not enough, and trusting it cost a false pass here.** Godot
+    re-parses a script on import only when it thinks the script has changed; once the
+    cache is warm, a file with a genuine parse error can import "clean" and the harnesses
+    then pass because nothing they touch loads it. `dice_hud.gd` did exactly that — it
+    failed on one run, was reported clean on the next with the error still in it, and was
+    only caught by asking the engine about the file directly.
+
+    `--check-only --script` gives a straight answer per file and does not consult the
+    cache, so this is the check that actually means something. It costs about a second
+    per script.
+    """
+    scripts = sorted(n for n in os.listdir(os.path.join(ROOT, "web", "scripts"))
+                     if n.endswith(".gd"))
+    print("\n--- parse (%d scripts) ---" % len(scripts))
+    failed = 0
+    for name in scripts:
+        result = subprocess.run(
+            [godot, "--headless", "--path", BUILD,
+             "--check-only", "--script", "res://scripts/%s" % name],
+            capture_output=True, text=True)
+        bad = [line for line in (result.stdout + result.stderr).splitlines()
+               if "Parse Error" in line or "Failed to load script" in line]
+        if bad:
+            failed += 1
+            print("  FAIL  %s" % name)
+            for line in bad[:4]:
+                print("        %s" % line.strip())
+    if failed:
+        print("\n%d script(s) do not parse" % failed)
+    else:
+        print("  all %d parse" % len(scripts))
+    return failed
+
+
 def serve():
     """Serve an exported build for a look in a real browser.
 
@@ -114,6 +151,9 @@ def main():
             print("\n%d parse/script error(s) — the port does not load" % len(bad))
             return 1
         print("imported clean")
+
+    if parse_check(godot):
+        return 1
 
     checks = harnesses()
     if not checks:

@@ -754,11 +754,12 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 entry was written, and it grew again between the estimate and the start, exactly as the
 warning below said it would. `Player.cs` has since been deleted (item 3).
 
-**Progress, August 2026.** 9b's tooling is built, 9c's workflow is written, and **nine of
-the twelve scripts are ported — 1,781 of 4,465 lines**, with `dice.gd` passing 14 checks
-whose numbers match the C# tree exactly. `dice_palette.gd`, `dice_hud.gd` and
-`game_manager.gd` remain; the last cannot be written before the other two, because it
-references them by type. See [tools/web-port/README.md](tools/web-port/README.md), which carries
+**Progress, August 2026.** 9a is **done**: all twelve scripts are ported, 4,465 lines of
+C#, and `game.tscn` loads and runs under the standard engine with 29 checks passing.
+9b's rewriter and 9c's workflow are built. What is left is the part the suggested order
+put first and this did not do — **the export has never been run**, because no
+standard-engine web templates are installed locally. The workflow is deliberately
+`workflow_dispatch`-only until that first run succeeds. See [tools/web-port/README.md](tools/web-port/README.md), which carries
 the running state; what follows is the plan it is being measured against.
 
 The one part of the suggested order that has **not** been done is its first step —
