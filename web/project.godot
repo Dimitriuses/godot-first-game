@@ -1,0 +1,35 @@
+; Engine configuration file.
+;
+; The GDScript tree's project file. It is NOT the C# one with a section removed --
+; keep the two in step by hand, deliberately, because the differences are the point:
+;
+;   * no [dotnet] section, and no "C#" in config/features;
+;   * main_scene by path rather than by uid, because the scenes in a build are
+;     rewritten copies and their uids are regenerated with them.
+;
+; Everything else must match ../project.godot exactly or the two trees render
+; differently and the screenshot parity gate (ROADMAP 9d) fails for a reason that has
+; nothing to do with the port.
+
+config_version=5
+
+[application]
+
+config/name="First Game"
+run/main_scene="res://scenes/game.tscn"
+config/features=PackedStringArray("4.4", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+window/stretch/mode="canvas_items"
+
+[filesystem]
+
+import/blender/enabled=false
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

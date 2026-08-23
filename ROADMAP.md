@@ -711,7 +711,7 @@ rim cut that decides a face's corner count being too loose for a pentagon.
 That is a good argument for having rendered them one at a time rather than in a batch: every
 one of those was caught by looking at a finished die and finding one thing wrong with it.
 
-## 9. A browser demo, via a hand-written GDScript port — planned, not started
+## 9. A browser demo, via a hand-written GDScript port — started, August 2026
 
 A playable GitHub Pages build is the single most valuable thing this repository could gain,
 and it is still blocked. Godot's own documentation, checked August 2026, is blunt about it:
@@ -750,8 +750,20 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 
 ### 9a. The port
 
-**Re-counted August 2026: about 4,160 lines across twelve scripts**, of which `Player.cs`
-(13 lines) is dead already (item 3). The old estimate here said 940 lines across five and
+**Re-counted August 2026: 4,465 lines across twelve scripts** — it was 4,160 when this
+entry was written, and it grew again between the estimate and the start, exactly as the
+warning below said it would. `Player.cs` has since been deleted (item 3).
+
+**Progress, August 2026.** The tooling in 9b is built and the first three scripts are
+ported: `dice.gd`, `dice_theme.gd` and `sfx.gd`, with `dice.gd` passing 14 checks whose
+numbers match the C# tree exactly. `GameManager.cs` (1,531 lines) and the four UI scripts
+are not started. See [tools/web-port/README.md](tools/web-port/README.md), which carries
+the running state; what follows is the plan it is being measured against.
+
+The one part of the suggested order that has **not** been done is its first step —
+proving the deployment. Only the `.mono` export templates are installed locally, so
+nothing has been exported yet. The port turning out to be testable without that is luck:
+running a GDScript project needs no templates, exporting one does. The old estimate here said 940 lines across five and
 "a day's work, roughly"; that was written before the dice pack, the right-click menus, the
 themes, the audio, the save file and the touch controls. It is several days now, and the
 estimate is the thing most likely to be wrong again by the time anyone starts — **re-count
