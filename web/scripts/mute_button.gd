@@ -38,8 +38,7 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.keycode == MUTE_KEY and event.pressed \
-			and not event.echo:
+	if Shortcuts.pressed(event, MUTE_KEY):
 		_toggle()
 		get_viewport().set_input_as_handled()
 

@@ -401,7 +401,7 @@ public partial class GameManager : Node2D
 			return;
 		}
 
-		if (@event is InputEventKey shiftKey && shiftKey.Keycode == Key.Shift
+		if (@event is InputEventKey shiftKey && Shortcuts.Is(shiftKey, Key.Shift)
 			&& shiftKey.Pressed && !shiftKey.Echo)
 		{
 			if (!isDragging)        // changing the selection mid-drag would be a surprise
@@ -411,14 +411,14 @@ public partial class GameManager : Node2D
 
 		if (@event is InputEventKey key && key.Pressed && !key.Echo)
 		{
-			if (key.Keycode == Key.Space)
+			if (Shortcuts.Is(key, Key.Space))
 			{
 				ThrowAllDice();
 				GetViewport().SetInputAsHandled();
 				return;
 			}
 
-			if (key.Keycode == Key.Escape && (pendingCopyScene != null
+			if (Shortcuts.Is(key, Key.Escape) && (pendingCopyScene != null
 				|| pendingLink != null || diceMenu.Target != null))
 			{
 				CancelCopy();
@@ -434,14 +434,14 @@ public partial class GameManager : Node2D
 			Dice subject = diceMenu.Target ?? hoveredDie;
 			if (subject != null && IsInstanceValid(subject) && !isDragging)
 			{
-				if (key.Keycode == DiceMenu.RollKey)
+				if (Shortcuts.Is(key, DiceMenu.RollKey))
 				{
 					RollOne(subject);
 					diceMenu.Close();
 					GetViewport().SetInputAsHandled();
 					return;
 				}
-				if (key.Keycode == DiceMenu.CopyKey)
+				if (Shortcuts.Is(key, DiceMenu.CopyKey))
 				{
 					BeginCopy(subject);
 					diceMenu.Close();

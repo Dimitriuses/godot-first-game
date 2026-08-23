@@ -422,18 +422,18 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventKey:
 		var key := event as InputEventKey
-		if key.keycode == KEY_SHIFT and key.pressed and not key.echo:
+		if Shortcuts.is_key(key, KEY_SHIFT) and key.pressed and not key.echo:
 			if not _is_dragging:    # changing the selection mid-drag would be a surprise
 				_select_all()
 			return
 
 		if key.pressed and not key.echo:
-			if key.keycode == KEY_SPACE:
+			if Shortcuts.is_key(key, KEY_SPACE):
 				throw_all_dice()
 				get_viewport().set_input_as_handled()
 				return
 
-			if key.keycode == KEY_ESCAPE and (not _pending_copy_scene.is_empty() \
+			if Shortcuts.is_key(key, KEY_ESCAPE) and (not _pending_copy_scene.is_empty() \
 					or _pending_link != null or _dice_menu.target != null):
 				_cancel_copy()
 				_cancel_link()
@@ -448,12 +448,12 @@ func _input(event: InputEvent) -> void:
 			if subject == null:
 				subject = _hovered_die
 			if subject != null and is_instance_valid(subject) and not _is_dragging:
-				if key.keycode == DiceMenu.ROLL_KEY:
+				if Shortcuts.is_key(key, DiceMenu.ROLL_KEY):
 					_roll_one(subject)
 					_dice_menu.close()
 					get_viewport().set_input_as_handled()
 					return
-				if key.keycode == DiceMenu.COPY_KEY:
+				if Shortcuts.is_key(key, DiceMenu.COPY_KEY):
 					_begin_copy(subject)
 					_dice_menu.close()
 					get_viewport().set_input_as_handled()

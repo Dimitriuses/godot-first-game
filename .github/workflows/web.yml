@@ -10,12 +10,13 @@
 
 name: web
 
-# Manual only, until the port is complete. The board cannot load without
-# game_manager.gd, so a push-triggered build would either fail at the gate or publish a
-# demo that does not run — and a broken demo is worse than none (ROADMAP 9d). Restore
-# `push: branches: [main]` once the port is playable; the gate below is what makes that
-# safe to do.
+# Every push to main, now that the port is playable and the first manual run has proved
+# the export. What makes this safe is the gate below rather than the trigger: check.py
+# has to pass before anything is exported, so a push that breaks the port fails the build
+# instead of publishing a broken demo.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

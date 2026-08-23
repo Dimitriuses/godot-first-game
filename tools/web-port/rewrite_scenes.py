@@ -44,6 +44,23 @@ SCRIPT_REF = re.compile(
 # An exported property assignment: a PascalCase key at the start of a line.
 PROPERTY = re.compile(r"^(?P<name>[A-Z]\w*) = ", re.MULTILINE)
 
+# A method declared in the C# script, so a connection can be checked against something
+# rather than renamed on faith.
+METHOD = re.compile(
+    r"(?:public|private|protected|internal)\s+"
+    r"(?:static\s+|override\s+|virtual\s+|async\s+|sealed\s+|partial\s+)*"
+    r"[\w<>\[\],.?]+\s+(?P<name>[A-Z]\w*)\s*\(")
+
+# The *third* place a scene names something in the script, and the one that was missed
+# first time round:
+#
+#     [connection signal="button_down" from="Button" to="." method="OnSpawnButton"]
+#
+# The Respawn button did nothing at all in the first web build because of this line. It
+# is quieter than the others: the scene loads, the button draws, it just never calls
+# anything.
+CONNECTION = re.compile(r'(?P<head>\[connection [^\]]*?method=")(?P<name>[A-Z]\w*)(?P<tail>")')
+
 # The *other* place a scene names an exported property, and the one that is easy to
 # miss because it does not look like an assignment:
 #
@@ -78,8 +95,12 @@ def exports_by_script():
             continue
         text = open(os.path.join(SCRIPTS, name), encoding="utf-8").read()
         stem = name[:-3]
-        found[stem] = {m.group("name"): snake(m.group("name"))
-                       for m in EXPORT.finditer(text)}
+        found[stem] = {
+            "exports": {m.group("name"): snake(m.group("name"))
+                        for m in EXPORT.finditer(text)},
+            "methods": {m.group("name"): snake(m.group("name"))
+                        for m in METHOD.finditer(text)},
+        }
     return found
 
 
@@ -101,11 +122,13 @@ def rewrite(text, exports, source):
 
     # Only the exports of scripts this scene actually attaches can legitimately appear.
     allowed = {}
+    callable_methods = {}
     for stem in scripts_used:
         if stem not in exports:
             raise SystemExit("%s: references scripts/%s.cs, which does not exist"
                              % (source, stem))
-        allowed.update(exports[stem])
+        allowed.update(exports[stem]["exports"])
+        callable_methods.update(exports[stem]["methods"])
 
     named = {m.group("name") for m in PROPERTY.finditer(text)}
     for m in NODE_PATHS.finditer(text):
@@ -117,6 +140,21 @@ def rewrite(text, exports, source):
             "A scene naming a property the script lacks loads silently with that export\n"
             "left null, so this is a hard error rather than a passthrough."
             % (source, ", ".join(unknown), "/".join(scripts_used)))
+
+    # Connections, checked against the script's own methods rather than renamed on
+    # faith. A connection to a method that is not there is the quietest failure in this
+    # whole file: the scene loads, the control draws, and pressing it does nothing.
+    unknown_methods = sorted({m.group("name") for m in CONNECTION.finditer(text)}
+                             - set(callable_methods))
+    if unknown_methods:
+        raise SystemExit(
+            "%s: connection(s) call %s, which %s does not declare.\n"
+            "A connection to a missing method leaves a control that draws and does\n"
+            "nothing, so this is a hard error rather than a passthrough."
+            % (source, ", ".join(unknown_methods), "/".join(scripts_used)))
+    text = CONNECTION.sub(
+        lambda m: "%s%s%s" % (m.group("head"), callable_methods[m.group("name")],
+                              m.group("tail")), text)
 
     text = PROPERTY.sub(lambda m: "%s = " % allowed[m.group("name")], text)
     text = NODE_PATHS.sub(
@@ -136,8 +174,10 @@ def main():
         ap.error("pass --out, or --check to see what would happen")
 
     exports = exports_by_script()
-    total = sum(len(v) for v in exports.values())
-    print("%d [Export]s across %d C# scripts" % (total, len(exports)))
+    total = sum(len(v["exports"]) for v in exports.values())
+    methods = sum(len(v["methods"]) for v in exports.values())
+    print("%d [Export]s and %d methods across %d C# scripts"
+          % (total, methods, len(exports)))
 
     if args.out:
         os.makedirs(args.out, exist_ok=True)
@@ -149,9 +189,11 @@ def main():
         text = open(os.path.join(SCENES, name), encoding="utf-8").read()
         out, allowed = rewrite(text, exports, name)
         renamed = sorted({m.group("name") for m in PROPERTY.finditer(text)})
-        print("%-14s%10d%10d  %s" % (name, text.count("\n") + 1, len(renamed),
-                                     ", ".join("%s->%s" % (r, allowed[r])
-                                               for r in renamed)))
+        wired = sorted({m.group("name") for m in CONNECTION.finditer(text)})
+        print("%-14s%10d%10d  %s" % (name, text.count("\n") + 1, len(renamed) + len(wired),
+                                     ", ".join(["%s->%s" % (r, allowed[r])
+                                                for r in renamed]
+                                               + ["%s()" % w for w in wired])))
         if args.out:
             with open(os.path.join(args.out, name), "w",
                       encoding="utf-8", newline="\n") as f:

@@ -114,5 +114,31 @@ func _ready() -> void:
 		data["dice"][0]["x"] == roundf(data["dice"][0]["x"]),
 		"x=%s" % data["dice"][0]["x"])
 
+	# The Respawn button, wired in the scene rather than in code. Its connection names a
+	# method, and the rewriter had been leaving that name in PascalCase — so the button
+	# drew, pressed, and called nothing at all in the first web build.
+	var respawn := game.get_node_or_null("Button")
+	var wired := false
+	if respawn != null:
+		for c in respawn.button_down.get_connections():
+			if str(c["callable"].get_method()) == "on_spawn_button":
+				wired = true
+	_check("the Respawn button is connected to the board", wired,
+		"button_down -> on_spawn_button" if wired else "NOT CONNECTED")
+
+	# And that pressing it actually gathers the dice, rather than merely resolving.
+	if respawn != null:
+		for d in game._dice:
+			d.teleport_to(Vector2(1000, 560))
+		await _frames(6)
+		respawn.emit_signal("button_down")
+		await _frames(20)
+		var gathered := true
+		for d in game._dice:
+			if d.global_position.distance_to(Vector2(1000, 560)) < 40.0:
+				gathered = false
+		_check("...and pressing it gathers the board", gathered,
+			"%d dice moved" % game._dice.size())
+
 	print("\n%s" % ("all checks passed" if failures == 0 else "%d FAILED" % failures))
 	get_tree().quit(0 if failures == 0 else 1)

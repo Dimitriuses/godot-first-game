@@ -43,7 +43,8 @@ The rewriter changes exactly three things and leaves everything else byte-identi
    `res://scripts/dice.gd`, and the `uid=` dropped — Godot mints one for the `.gd` on
    import, and carrying the C# one over points at nothing.
 2. Exported property keys renamed, `AnimatedSprite` → `animated_sprite`.
-3. Nothing else.
+3. Signal connections repointed, `method="OnSpawnButton"` → `method="on_spawn_button"`.
+4. Nothing else.
 
 **The rename is the dangerous part, and it has two halves.** A scene that names a
 property the script does not have loads *successfully*, with that export left null, and
@@ -65,12 +66,24 @@ Rename the assignments and leave this and the scene still loads, still says noth
 binds neither path. It was caught by reading the rewriter's own output rather than by any
 check, which is the argument for looking at generated files at least once.
 
-So the mapping is **derived from the C# sources** — every `[Export]` is parsed out of
-`scripts/*.cs` — rather than written down, and an exported key the tool cannot account
-for is a hard error rather than a passthrough:
+**A scene names things in the script in three places, and each was found the hard way.**
+The third is the connection:
+
+```
+[connection signal="button_down" from="Button" to="." method="OnSpawnButton"]
+```
+
+That one line is why the Respawn button did nothing in the first deploy: the scene loaded,
+the button drew, and pressing it called a method GDScript does not have. It is the
+quietest of the three — no null anything, just a control that ignores you.
+
+So the mapping is **derived from the C# sources** — every `[Export]` and every method is
+parsed out of `scripts/*.cs` — rather than written down, and a key or a method the tool
+cannot account for is a hard error rather than a passthrough:
 
 ```
 dice.tscn: exported key(s) SpinSpeed are not [Export]s of Dice.
+game.tscn: connection(s) call OnRespawnPressed, which GameManager does not declare.
 ```
 
 Verify that guard still fires before trusting it; it is the only thing standing between

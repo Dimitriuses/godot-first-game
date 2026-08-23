@@ -201,6 +201,15 @@ consequences, all of which have bitten:
   cancelled itself this way: `_Input` treated every click as "somewhere else" and cleared the
   pending pair a frame before the die said "it was me".
 
+**`Keycode` is the letter the layout produces; `PhysicalKeycode` is the key that was
+pressed.** Every shortcut here read `Keycode` alone for a year and worked, because a Latin
+layout makes the two agree. On a Cyrillic layout the key engraved R produces К, so R and C
+simply never fired — reported against the web build, but never a web bug: the desktop
+build had it too and nobody had tried. `Shortcuts.Is` matches either, and **everything
+that reads a key goes through it**, so a shortcut added later cannot go back to being
+layout-dependent. No layout makes a Latin letter from a *different* physical key, so the
+two cannot disagree into the wrong action.
+
 **Read the click's own state, not the machine's.** Position comes from
 `InputEventMouseButton.Position` and modifiers from `.ShiftPressed`, never from
 `GetViewport().GetMousePosition()` or `Input.IsKeyPressed`. `DicePalette` broke this rule

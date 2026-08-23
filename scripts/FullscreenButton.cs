@@ -37,7 +37,7 @@ public partial class FullscreenButton : Control
 
 	public override void _Input(InputEvent @event)
 	{
-		if (@event is InputEventKey key && key.Keycode == FullscreenKey && key.Pressed
+		if (@event is InputEventKey key && Shortcuts.Is(key, FullscreenKey) && key.Pressed
 			&& !key.Echo)
 		{
 			Toggle();

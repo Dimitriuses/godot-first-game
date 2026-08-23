@@ -24,6 +24,7 @@ one number the web build exists to keep down.
 """
 
 import argparse
+import io
 import os
 import shutil
 import subprocess
@@ -60,6 +61,25 @@ def copy_tree(src, dst):
     return copied, skipped
 
 
+def head_include():
+    """`web/head_include.html`, escaped for a Godot config string.
+
+    It is kept as a real HTML file rather than written inline in `export_presets.cfg`
+    because it is a page of JavaScript with a page of reasoning above it, and a
+    config-escaped one-liner is not something anybody would read twice. The escaping is
+    the whole cost of that: quotes and newlines, which is all a Godot string needs.
+
+    What it does and why it cannot be done from GDScript is in the file itself — in
+    short, it has to run before the engine creates its AudioContext.
+    """
+    path = os.path.join(WEB, "head_include.html")
+    if not os.path.exists(path):
+        return ""
+    text = io.open(path, encoding="utf-8").read()
+    return (text.replace("\\", "\\\\").replace('"', '\\"')
+                .replace("\n", "\\n").replace("\t", "\\t"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=DEFAULT_OUT)
@@ -87,8 +107,14 @@ def main():
     # rather than pointed at. CI overrides the output path on the command line.
     preset = os.path.join(WEB, "export_presets.cfg")
     if os.path.exists(preset):
-        shutil.copy2(preset, os.path.join(out, "export_presets.cfg"))
-        print("%-16s%s" % ("export_presets.cfg", "from web/"))
+        text = io.open(preset, encoding="utf-8").read()
+        text = text.replace('html/head_include=""',
+                            'html/head_include="%s"' % head_include())
+        with io.open(os.path.join(out, "export_presets.cfg"), "w",
+                     encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        print("%-16s%s" % ("export_presets.cfg",
+                           "from web/, head_include folded in"))
 
     os.makedirs(os.path.join(out, "scripts"), exist_ok=True)
     for name in scripts:

@@ -80,7 +80,7 @@ public partial class DicePalette : Control
 
 	public override void _Input(InputEvent @event)
 	{
-		if (@event is InputEventKey key && key.Keycode == Key.Tab && key.Pressed && !key.Echo)
+		if (@event is InputEventKey key && Shortcuts.Is(key, Key.Tab) && key.Pressed && !key.Echo)
 		{
 			SetDrawerOpen(!isOpen, true);
 			GetViewport().SetInputAsHandled();

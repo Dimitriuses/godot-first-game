@@ -35,7 +35,7 @@ public partial class MuteButton : Control
 
 	public override void _Input(InputEvent @event)
 	{
-		if (@event is InputEventKey key && key.Keycode == MuteKey && key.Pressed
+		if (@event is InputEventKey key && Shortcuts.Is(key, MuteKey) && key.Pressed
 			&& !key.Echo)
 		{
 			Toggle();

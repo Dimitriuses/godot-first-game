@@ -83,6 +83,29 @@ func _ready() -> void:
 	_check("Escape cancels the pending copy",
 		game._pending_copy_scene.is_empty(), "cleared")
 
+	# --- R and C on a non-Latin layout ------------------------------------------
+	# What actually broke them in the browser. On a Cyrillic layout the key engraved R
+	# produces К, so `keycode` is that and only `physical_keycode` is KEY_R. Simulated
+	# here by setting the two to different things, which is exactly what the platform
+	# reports.
+	die.mouse_entered.emit()
+	await _frames(1)
+	var before_layout := die.is_rolling
+	var cyrillic := InputEventKey.new()
+	cyrillic.keycode = KEY_UNKNOWN      # the layout produced something else entirely
+	cyrillic.physical_keycode = KEY_R
+	cyrillic.pressed = true
+	get_viewport().push_input(cyrillic, true)
+	await _frames(2)
+	_check("R works when only the physical key matches",
+		die.is_rolling and not before_layout,
+		"rolling %s -> %s" % [before_layout, die.is_rolling])
+
+	for i in 400:
+		if not die.is_rolling:
+			break
+		await get_tree().process_frame
+
 	# --- the double tap ---------------------------------------------------------
 	# What a touchscreen has instead of a right button. Godot reports the touch itself and
 	# also emulates a mouse from it; the board reads the touch and swallows the emulated

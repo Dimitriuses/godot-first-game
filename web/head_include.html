@@ -1,0 +1,87 @@
+<script>
+// Injected into the exported page's <head> by tools/web-port/assemble.py, which folds
+// it into export_presets.cfg's html/head_include.
+//
+// **It has to run before the engine boots, and that is the whole point.** The first
+// version of this lived in web_platform.gd and ran from GameManager._ready — far too
+// late. Godot creates its AudioContext while the WebAssembly module starts up, so by
+// the time any GDScript runs the context already exists and a constructor patch
+// installed then can never see it. The browser reported exactly that and nothing else:
+//
+//     Autoplay of AudioContext was blocked. It must be created or resumed after a
+//     user gesture on the page.
+//     web platform glue: installed=true motion=false audio_unlocked=not yet
+//
+// Two jobs, both of which a browser only grants from inside a real user gesture, and
+// neither of which Godot does for us on this platform:
+//
+//   * resume the suspended AudioContext, which is why the build was silent;
+//   * ask for motion permission, because the web platform implements no sensor API and
+//     iOS 13+ refuses DeviceMotionEvent.requestPermission() outside a gesture.
+//
+// Everything is wrapped so that a failure here can never stop the game loading: a
+// silent build is bad, a build that does not start is worse.
+(function () {
+	var w = window.__diceWeb = window.__diceWeb || {x: 0, y: 0, z: 0, live: 0, audio: 0};
+	w.ctxs = w.ctxs || [];
+
+	// Record every AudioContext the page makes, Godot's included. Reflect.construct
+	// returns a genuine instance, so `ctx instanceof AudioContext` still holds and
+	// nothing downstream can tell it was made through here.
+	try {
+		var Real = window.AudioContext || window.webkitAudioContext;
+		if (Real && !w.patched) {
+			w.patched = 1;
+			var Patched = function () {
+				var ctx = Reflect.construct(Real, arguments, Real);
+				w.ctxs.push(ctx);
+				return ctx;
+			};
+			Patched.prototype = Real.prototype;
+			window.AudioContext = Patched;
+			if (window.webkitAudioContext) { window.webkitAudioContext = Patched; }
+		}
+	} catch (err) {}
+
+	function bindMotion() {
+		window.addEventListener('devicemotion', function (e) {
+			var a = e.accelerationIncludingGravity || e.acceleration;
+			if (!a) { return; }
+			w.x = a.x || 0;
+			w.y = a.y || 0;
+			w.z = a.z || 0;
+			w.live = 1;
+		});
+	}
+
+	function onGesture() {
+		try {
+			for (var i = 0; i < w.ctxs.length; i++) {
+				if (w.ctxs[i].state === 'suspended') { w.ctxs[i].resume(); }
+			}
+			// Only claim success once there is something to have succeeded on.
+			if (w.ctxs.length) { w.audio = 1; }
+		} catch (err) {}
+
+		try {
+			if (!w.motionAsked) {
+				w.motionAsked = 1;
+				if (typeof DeviceMotionEvent !== 'undefined' &&
+						typeof DeviceMotionEvent.requestPermission === 'function') {
+					DeviceMotionEvent.requestPermission().then(function (state) {
+						if (state === 'granted') { bindMotion(); }
+					}).catch(function () {});
+				} else {
+					bindMotion();
+				}
+			}
+		} catch (err) {}
+	}
+
+	// Not `once`: the context can be created after the first gesture, and a page that
+	// has been backgrounded can have it suspended again on return.
+	['pointerdown', 'touchend', 'keydown', 'click'].forEach(function (name) {
+		window.addEventListener(name, onGesture, {passive: true});
+	});
+})();
+</script>
