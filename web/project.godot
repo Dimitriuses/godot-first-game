@@ -24,6 +24,29 @@ config/icon="res://icon.svg"
 
 window/stretch/mode="canvas_items"
 
+[audio]
+
+; **This is why the web build was silent, and it is a one-line difference from the C#
+; tree that no headless test could have found.**
+;
+; Godot has two playback paths. "Stream" mixes in the engine and hands one buffer to the
+; platform — what every desktop build does, and what every harness here exercises.
+; "Sample" hands the clip to the platform to play, and on the web that means a Web Audio
+; AudioBufferSourceNode routed through a splitter, per-channel gains and a merger into
+; the bus node. **Godot defaults the web export to Sample** (`default_playback_type.web`
+; ships as 1) while everything else defaults to Stream, so the web build was the only
+; place this path ran at all.
+;
+; Measured on the deployed page with Playwright: the AudioContext reached 'running', the
+; buffer source produced signal (peak 0.059 at the node), a tone injected straight into
+; the bus gain came out at full strength — and every node between the two passed nothing.
+; The sample path simply did not carry to the bus this game creates at runtime.
+;
+; 0 puts the web build on the same path as the desktop one, which is also the path all
+; 60 local checks cover. If sample playback is ever wanted back, it needs a browser test
+; to go with it: `python tools/web-port/browser_check.py` is that test.
+general/default_playback_type.web=0
+
 [filesystem]
 
 import/blender/enabled=false

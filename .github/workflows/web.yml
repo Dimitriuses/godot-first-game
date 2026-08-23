@@ -101,9 +101,40 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Drive the page that was just published and check it actually makes a noise.
+  #
+  # Everything in `build` runs the GDScript tree headless under the desktop engine, and
+  # the desktop engine is exactly where the audio bug could not happen: Godot ships
+  # `audio/general/default_playback_type.web` as Sample and everything else as Stream, so
+  # the broken path only ever ran in a browser. Sixty passing checks and a silent game,
+  # three deploys running. This is the check that would have caught it on the first one.
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save playwright@1.62.1
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for the deployment to be live
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null "${{ needs.deploy.outputs.page_url }}"; then
+              echo "live after ${i} attempt(s)"; exit 0
+            fi
+            sleep 10
+          done
+          echo "page never came up"; exit 1
+      - name: The page makes a noise
+        run: node tools/web-port/browser_check.mjs "${{ needs.deploy.outputs.page_url }}"

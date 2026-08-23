@@ -537,6 +537,15 @@ why. Do not rebuild it without reading that first.
   state the mixer has not been keeping up to date, and a sound already sounding stops
   rather than finishing under a mute that was just asked for. It also means a test can
   still see which clip is on a voice while the game is silent.
+- **Godot plays audio two different ways, and it picks the other one on the web.**
+  `audio/general/default_playback_type` is Stream everywhere — mix in the engine, hand
+  the platform one buffer — but Godot ships `default_playback_type.web` as **Sample**,
+  which hands each clip to Web Audio to route itself. The browser build was silent for
+  three deploys because of it, and no harness here could ever have caught it: they all
+  run the desktop engine, on the desktop default. `web/project.godot` pins it back to
+  Stream. **Anything that behaves differently on one platform needs a test that runs on
+  that platform** — `node tools/web-port/browser_check.mjs` is that test, and CI runs it
+  against the page it just published.
 - **A sound is generated, never sampled.** `tools/audio-render/make_sounds.py` synthesises
   all sixteen and is the only place their character lives; `scripts/Sfx.cs` holds only
   policy — how loud, how often, how many at once. Two rules that are load-bearing: relative

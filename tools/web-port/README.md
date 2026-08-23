@@ -187,6 +187,44 @@ can reach it, and it was shipped on reading alone twice and wrong both times. Th
 asserts what actually failed: that a context created after the patch is captured, that a
 suspended one reports as blocked, and that a gesture moves it to `running`.
 
+## Checking the deployed page
+
+```sh
+node tools/web-port/browser_check.mjs [url]
+```
+
+Drives the published page in a real browser, splices an `AnalyserNode` onto everything
+that reaches the `AudioContext` destination, throws every die, and reads the waveform.
+Silence fails. CI runs it after `deploy`, against the URL that was just published.
+
+**It exists because sixty passing checks sat alongside a silent game for three deploys.**
+Everything else here runs the GDScript tree headless under the *desktop* engine, and the
+desktop engine is the one place the bug could not happen:
+
+| | `default_playback_type` | path |
+|---|---|---|
+| desktop, and every harness here | Stream (0) | engine mixer → one buffer to the platform |
+| **web, as Godot ships it** | **Sample (1)** | Web Audio buffer source → splitter → gains → merger → bus |
+
+Godot overrides the default for web only, so the sample path ran in the browser and
+nowhere else. Measured on the live page: the `AudioContext` reached `running`, the buffer
+source produced signal (peak 0.059 at the node), a tone injected straight into the bus
+gain came out at full strength — and nothing in between passed anything at all.
+
+`web/project.godot` now sets `general/default_playback_type.web=0`, putting the web build
+on the same path as the desktop one and as all sixty local checks. The browser check
+prints which path is in use, so a regression names itself:
+
+```
+playback path: Sample (AudioBufferSourceNode present)
+```
+
+**Two deploys were spent on the wrong cause before this** — the autoplay policy, which
+was real but was never the whole story. `web/head_include.html` still earns its place
+(the context does start suspended, and the unlock is what gets it to `running`), but the
+sound would not have arrived even once it was. Guessing from a console log cost more than
+driving the page would have.
+
 ## The export, and why it is CI's
 
 `.github/workflows/web.yml` installs the **standard** engine and its web export
