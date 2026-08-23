@@ -378,21 +378,35 @@ number of dice was needed; the arithmetic was the bug, not the count.
 
 ---
 
-## 9. Before a web deploy — what is not ready
+## 9. The web deploy — what it is, and what is still not proven
 
 The browser build is [ROADMAP](ROADMAP.md) item 9. None of the following is a bug in the
 game; they are the things that stand between it and a Pages URL, listed here so that
 "is it ready?" has one answer.
 
+**The demo is live at [dimitriuses.github.io/godot-first-game](https://dimitriuses.github.io/godot-first-game/)**,
+published by CI from the hand-written GDScript port in `web/`. What follows is what that
+arrangement costs, and what about it is still untested.
+
 - **C# cannot be exported to the web at all.** Re-checked in August 2026 by adding a Web
   preset and running the export: Godot refuses before it starts, with *"Export to Web is
-  currently not supported in Godot 4 when using C#/.NET."* This is the blocker, and the
-  reason item 9 is a hand-written GDScript port rather than a build setting.
-- **47 MB of dice artwork would go into the download — and it used to be 727 MB in
-  memory.** The memory half is **fixed**: the pack is now a manifest of paths
+  currently not supported in Godot 4 when using C#/.NET."* This is why item 9 is a
+  hand-written GDScript port rather than a build setting, and it is unchanged.
+- **The two trees are checked, not guaranteed.** `web/` is 4,465 lines of C# ported by
+  hand. Sixty headless checks and a browser test stand between a change and the published
+  page, but they are a sample of the behaviour and not a proof of equivalence: a change to
+  the C# tree that nobody mirrors will pass everything and quietly leave the demo stale.
+  **The screenshot diff that 9d called for does not exist yet** — it is the one gate that
+  would catch a rendering or scene-wiring difference the harnesses cannot see.
+- **Only one browser has been driven.** `browser_check.mjs` runs Chrome. Firefox is where
+  the bugs were reported from and is checked by hand; Safari and iOS have never been
+  opened at all, which matters most for the motion permission path, since iOS is the only
+  platform that needs `DeviceMotionEvent.requestPermission()`.
+- **The artwork is most of the download, and it used to be 727 MB in memory.** The memory half is **fixed**: the pack is now a manifest of paths
   (`assets/dice/pack.json`) and a die's sheets load only when one is spawned, so startup
   went from 727 MB of texture memory to 58 MB. See CLAUDE.md and
-  [tools/clip-lab/](tools/clip-lab/README.md). The download half is still open.
+  [tools/clip-lab/](tools/clip-lab/README.md). The download half is now largely addressed —
+  see below — and what is left of it is one unfinished idea rather than a blocker.
   `export_filter="all_resources"` ships everything under `assets/`, and `assets/dice/`
   alone is 47 MB across eight dice.
   That is fine for a desktop binary and not fine for a browser. The options are now
@@ -416,11 +430,20 @@ game; they are the things that stand between it and a Pages URL, listed here so 
   trajectories, so no prefix can be shared without one. **VRAM compression was measured and rejected** — it cuts memory
   fourfold but multiplies the download by four and a half, and memory stopped being the
   constraint when the pack went lazy.
-- **The save has never been run in a browser.** `user://` maps to IndexedDB in a web export,
-  which is why the save was written with plain `FileAccess` and no JavaScript, but that path
-  has only been exercised on a desktop. The flush happens when the file is closed.
-- **Shake-to-throw will not work in a browser as written.** Godot's web platform does not
-  implement the sensor APIs, so `Input.GetAccelerometer()` returns zero there.
+- ~~**The save has never been run in a browser.**~~ It has, and it works. `user://` maps
+  to IndexedDB in a web export, which is why the save was written with plain `FileAccess`
+  and no JavaScript — and driving the published page confirms the file arrives:
+  `/userfs/godot/app_userdata/First Game/board.json`, in the `FILE_DATA` store. The flush
+  happens when the file is closed. **What is not separately proven is the read back on a
+  return visit**; it is the same code the desktop restores with, and it has not been
+  measured across a reload.
+- **Shake-to-throw works in the browser, but has never been tried on a phone.** Godot's
+  web platform implements no sensor API, so `Input.GetAccelerometer()` returns zero there
+  and `web/head_include.html` feeds `ShakeGesture` from the DOM's `devicemotion` event
+  instead — asked for from inside a real touch, because iOS 13+ grants
+  `DeviceMotionEvent.requestPermission()` nowhere else. That last part is the untested
+  half: no iOS device has opened the page, and it is the only platform where the
+  permission prompt exists at all.
   `ShakeGesture` is fed samples rather than polling precisely so the port can hand it values
   from the DOM's `devicemotion` event — see ROADMAP 9b-touch, including the iOS permission
   gesture that has to go with it.

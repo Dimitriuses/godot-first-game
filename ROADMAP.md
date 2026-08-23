@@ -711,17 +711,70 @@ rim cut that decides a face's corner count being too loose for a pentagon.
 That is a good argument for having rendered them one at a time rather than in a batch: every
 one of those was caught by looking at a finished die and finding one thing wrong with it.
 
-## 9. A browser demo, via a hand-written GDScript port — started, August 2026
+## 9. A browser demo, via a hand-written GDScript port — ✅ done, August 2026
 
-A playable GitHub Pages build is the single most valuable thing this repository could gain,
-and it is still blocked. Godot's own documentation, checked August 2026, is blunt about it:
+**It is live: [dimitriuses.github.io/godot-first-game](https://dimitriuses.github.io/godot-first-game/)**, built and published by
+`.github/workflows/web.yml` on every push to `main`.
+
+A playable GitHub Pages build was the single most valuable thing this repository could gain,
+and it was blocked. Godot's own documentation, checked August 2026, is blunt about it:
 
 > Projects written in C# using Godot 4 currently cannot be exported to the web.
 
-So waiting is not a plan. **The decision (August 2026): port the gameplay to GDScript by hand
-into a second tree, after item 8.** C# stays canonical — it is the project, and it is where
-work happens. The GDScript tree is a derived artifact that exists only to produce the web
-build.
+So waiting was not a plan. **The decision (August 2026): port the gameplay to GDScript by
+hand into a second tree, after item 8.** C# stays canonical — it is the project, and it is
+where work happens. The GDScript tree is a derived artifact that exists only to produce the
+web build.
+
+### What it actually took
+
+**The port: 4,465 lines of C# across twelve scripts, by hand.** The estimate in 9a said
+4,160 and warned it would be wrong again by the time anyone started; it was. GDScript has
+no method overloads, no tuples and no `HashSet`, and `load` is a built-in — each of those
+shows up in the notes at the head of the file it changed.
+
+**The scene rewriter (9b) grew a third job nobody predicted.** 9b listed two: repoint the
+script `ExtResource`, and rename the exported property keys. There is a third, and it is
+the quietest of them —
+
+```
+[connection signal="button_down" from="Button" to="." method="OnSpawnButton"]
+```
+
+— a signal connection naming a method that GDScript does not have. The scene loads, the
+button draws, and pressing it calls nothing. The Respawn button was dead in the first two
+deploys because of that line. There was a fourth as well, `node_paths=PackedStringArray(...)`,
+which declares *which* exports are NodePaths and had to be renamed alongside the
+assignments. Every one of the four is now checked against the C# source and is a hard
+error rather than a passthrough.
+
+**The parity gates (9d) exist and are gates.** Sixty headless checks over four harnesses,
+plus a parse check of every script — and both had to be tightened after they passed
+something they should not have: `check.py` only parse-checked `web/scripts/`, not the
+harnesses, and a harness that failed to load still exited zero, so ten checks were
+silently not running.
+
+**Four bugs reached the deployed page that nothing local could have caught**, and they are
+the real lesson of this item:
+
+| symptom | cause |
+|---|---|
+| palette arrow drew as a blank box | `◀ ▶ ×` are in the desktop font and not the browser's |
+| double-tap did nothing | `InputEventScreenTouch.double_tap` is filled in by the platform, and web does not fill it in |
+| R and C did nothing | `keycode` is the *layout's* letter; on a Cyrillic layout only `physical_keycode` matches — never a web bug, the desktop build had it too |
+| **no sound at all** | Godot ships `audio/general/default_playback_type.web` as **Sample** and everything else as **Stream**, so the web build was the only place that path ran |
+
+The last one cost three deploys and two wrong diagnoses before it was measured rather than
+inferred. It is why 9d now has a fifth gate that the plan never imagined: a browser test,
+`tools/web-port/browser_check.mjs`, which drives the published page with Playwright,
+splices an `AnalyserNode` onto everything reaching the audio destination, throws every die
+and reads the waveform. CI runs it after `deploy` and fails the build on silence.
+
+**`web/head_include.html` is the other thing the plan did not have.** Browsers start an
+`AudioContext` suspended and only lift that inside a user gesture — and every control in
+this game is drawn *inside the canvas*, so no click ever reaches the page. The include
+runs before the engine boots (it has to: Godot makes its context during startup), records
+it, and offers a real DOM button if an ordinary gesture is not enough.
 
 A translator was considered and deferred; see 9e.
 
@@ -731,8 +784,9 @@ Godot 4.3 the **single-threaded** web export is the default, and it does not nee
 requires. GitHub Pages cannot set custom headers, so this project must stay on the
 single-threaded export — and by default it already would.
 
-**Exit condition.** If .NET web export ever ships, all of this is deletable: drop `web/`, drop
-the workflow, export the C# project directly. That line in the Godot docs is the thing to watch.
+**Exit condition, unchanged.** If .NET web export ever ships, all of this is deletable:
+drop `web/`, drop the workflow, export the C# project directly. That line in the Godot docs
+is still the thing to watch, and it is still there.
 
 Re-checked against 4.4.1 in August 2026 by adding a Web preset and running the export. The
 editor refuses before it starts, in as many words: *"Export to Web is currently not supported
@@ -754,18 +808,19 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 entry was written, and it grew again between the estimate and the start, exactly as the
 warning below said it would. `Player.cs` has since been deleted (item 3).
 
-**Progress, August 2026.** 9a is **done**: all twelve scripts are ported, 4,465 lines of
-C#, and `game.tscn` loads and runs under the standard engine with 29 checks passing.
-9b's rewriter and 9c's workflow are built. What is left is the part the suggested order
-put first and this did not do — **the export has never been run**, because no
-standard-engine web templates are installed locally. The workflow is deliberately
-`workflow_dispatch`-only until that first run succeeds. See [tools/web-port/README.md](tools/web-port/README.md), which carries
-the running state; what follows is the plan it is being measured against.
+**Done.** All twelve scripts are ported and the demo is live. See
+[tools/web-port/README.md](tools/web-port/README.md), which carries the running state;
+what follows is the plan it was measured against.
 
-The one part of the suggested order that has **not** been done is its first step —
-proving the deployment. Only the `.mono` export templates are installed locally, so
-nothing has been exported yet. The port turning out to be testable without that is luck:
-running a GDScript project needs no templates, exporting one does. The old estimate here said 940 lines across five and
+**The suggested order got its first step wrong, and it cost real time.** It said to prove
+the deployment before building anything to deploy into it, "because the unknowns live
+there" — and the unknowns did live there, but nothing local could reach them. No
+standard-engine web templates are installed on the development machine, so the entire port
+was written and passed sixty checks before it was ever exported once. That the port turned
+out to be testable without templates is luck rather than design: running a GDScript project
+needs none, exporting one does. **The right first step would have been to get CI exporting
+a stub on day one**, which is cheap, and to treat the browser as a test target rather than
+as a place to look at the result. Four bugs waited in it. The old estimate here said 940 lines across five and
 "a day's work, roughly"; that was written before the dice pack, the right-click menus, the
 themes, the audio, the save file and the touch controls. It is several days now, and the
 estimate is the thing most likely to be wrong again by the time anyone starts — **re-count

@@ -3,6 +3,12 @@
 ![Godot](https://img.shields.io/badge/Godot-4.4.1%20.NET-478cbf)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Play it](https://img.shields.io/badge/play%20it-in%20your%20browser-e6484f)](https://dimitriuses.github.io/godot-first-game/)
+
+### ▶ [Play it in your browser](https://dimitriuses.github.io/godot-first-game/)
+
+No install, no account. It runs on a phone too — drag with a finger, double-tap for the
+menus, shake to throw the board.
 
 Drag any of **eight dice** — d4, d6, d8, d10, d12, d20, a numbered d6 and a percentile d10 —
 from the palette down the left, sling them across a pixel-art board, and let go: they tumble, land
@@ -57,9 +63,10 @@ given, keeping its aspect, so the whole table is visible at any size rather than
 revealing more empty world as it grows. Touch works too — Godot turns taps into clicks, and
 a **double-tap** stands in for the right-click that a touchscreen has no way to make. The
 Shift group drag has no modifier key to hold on a screen, so it is also a toggle button in
-the corner. Shaking the device throws the board on any export that reports an
-accelerometer; a browser does not, which is noted in
-[ROADMAP](ROADMAP.md) item 9 as work for the web port rather than something missing here.
+the corner. Shaking the device throws the board. Godot's web platform implements no sensor API at
+all, so the browser build feeds the same gesture detector from the DOM's `devicemotion`
+event instead — asked for from inside a real touch, because iOS grants motion permission
+nowhere else.
 
 A die you have not used before takes a moment to load — up to two thirds of a second for
 the d20. You should never see it: the palette's icon is put down at once and plays the
@@ -69,8 +76,8 @@ same place.
 The board and the settings **save themselves** — where every die is standing, which face it
 shows, its colour, which dice are linked, the palette's colours, the panels, and whether the
 sound is off. Close the game and reopen it and the table is as you left it. It writes to
-`user://`, which Godot maps to browser storage in a web export, so the same code will keep a
-Pages build's board between visits with nothing added.
+`user://`, which Godot maps to IndexedDB in a web export — so the same code keeps the
+browser build's board between visits, with no second code path and nothing added.
 
 Dice come in seven colour schemes — bone, crimson, emerald, sapphire, amber, obsidian and
 ivory. Nothing is re-rendered for them and there are no extra images: a small shader reads
@@ -131,12 +138,32 @@ dotnet build FirstGame.csproj
 Exporting a Windows binary uses the committed preset, which writes to `builds/`
 (gitignored).
 
-**There is no browser demo, and there cannot be one while this stays in C#.** Godot's own
-documentation is blunt: *"Projects written in C# using Godot 4 currently cannot be exported
-to the web."* The installed `4.4.1.stable.mono` template set has no web templates at all.
-A playable Pages demo means getting the gameplay into GDScript. The plan is a hand-written
-port in a second tree under `web/`, with C# staying canonical and CI checking the two do
-not drift — [ROADMAP.md](ROADMAP.md) item 9, the largest piece of work left.
+### The browser demo
+
+**[dimitriuses.github.io/godot-first-game](https://dimitriuses.github.io/godot-first-game/)** is built and published by CI from a
+**hand-written GDScript port** of the gameplay, in `web/`.
+
+That indirection is not a preference. Godot's own documentation is blunt — *"Projects
+written in C# using Godot 4 currently cannot be exported to the web"* — and the editor
+refuses before it starts. So the 4,465 lines of C# were ported by hand into a second tree,
+and **C# stays canonical**: `web/` is a derived artifact, and when the two disagree the C#
+one is right.
+
+What keeps them from drifting is machinery rather than discipline. `scenes/` and `assets/`
+are *shared*, never copied: a rewriter repoints the scripts and renames the exported
+properties and signal connections, and refuses outright on anything it cannot account for.
+Sixty headless checks run the ported tree before anything is exported, and a browser test
+drives the published page afterwards and fails the build if it does not make a noise.
+
+```sh
+python tools/web-port/check.py              # assemble, parse, and run every harness
+node tools/web-port/browser_check.mjs       # drive the live page
+```
+
+[tools/web-port/](tools/web-port/README.md) has the details, including the two bugs that
+only a browser could have found: a glyph the desktop font had and the browser's did not,
+and Godot quietly defaulting the web export to a different audio playback path than every
+other platform.
 
 ## Layout
 
@@ -186,9 +213,10 @@ The short version. Still open:
   be flushed. Silent and harmless, still unguarded.
 - **Nothing is committed as a test.** Every change is verified with a throwaway headless
   harness that is then deleted; the recipe is in [CLAUDE.md](CLAUDE.md).
-- **A browser build is not ready** — C# cannot be web-exported at all. The artwork's
-  share of the download is down to 11 MB from 33, by importing the sheets as lossy WebP and
-  thinning the roll clips. KNOWNISSUES 9 lists what still stands in the way.
+- **The browser demo is a second, hand-written tree.** C# cannot be web-exported at all,
+  so `web/` is a GDScript port that CI assembles, gates and publishes. It is checked
+  against the C# tree rather than guaranteed identical to it — see KNOWNISSUES 9 for what
+  that costs and what is still unproven.
 
 Fixed, and worth knowing were once true: the die used to draw its number from
 `System.Random`, roll itself unprompted, tunnel through the walls above 8,000 px/s, and be
