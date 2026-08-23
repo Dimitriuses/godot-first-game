@@ -2,28 +2,33 @@
 // Injected into the exported page's <head> by tools/web-port/assemble.py, which folds
 // it into export_presets.cfg's html/head_include.
 //
-// **It has to run before the engine boots, and that is the whole point.** The first
-// version of this lived in web_platform.gd and ran from GameManager._ready — far too
-// late. Godot creates its AudioContext while the WebAssembly module starts up, so by
-// the time any GDScript runs the context already exists and a constructor patch
-// installed then can never see it. The browser reported exactly that and nothing else:
+// **It has to run before the engine boots.** Godot creates its AudioContext while the
+// WebAssembly module starts up, so a constructor patch installed from GDScript never
+// sees it. That was the first version of this and it recorded nothing.
 //
-//     Autoplay of AudioContext was blocked. It must be created or resumed after a
-//     user gesture on the page.
-//     web platform glue: installed=true motion=false audio_unlocked=not yet
+// Two jobs, both of which a browser only grants from inside a user gesture, and neither
+// of which Godot does for us on this platform:
 //
-// Two jobs, both of which a browser only grants from inside a real user gesture, and
-// neither of which Godot does for us on this platform:
-//
-//   * resume the suspended AudioContext, which is why the build was silent;
+//   * get the AudioContext out of 'suspended', which is why the build was silent;
 //   * ask for motion permission, because the web platform implements no sensor API and
 //     iOS 13+ refuses DeviceMotionEvent.requestPermission() outside a gesture.
 //
-// Everything is wrapped so that a failure here can never stop the game loading: a
-// silent build is bad, a build that does not start is worse.
+// **Why a visible button rather than just a listener.** Catching the context was not
+// enough: with listeners on window, both this code and Godot's own resume were refused
+// every time, and the console filled with the block message from both call sites at
+// once. Every control in this game is drawn *inside the canvas*, so every click is a
+// canvas event that Godot handles and consumes — which leaves the page short of the
+// activation the audio API wants. A real DOM button, above the canvas, clicked directly,
+// is an activation nothing can intercept. It only appears if the context is actually
+// stuck, and it removes itself the moment the sound is running, so a browser that never
+// had the problem never shows it.
+//
+// Everything is wrapped so a failure here can never stop the game loading: a silent
+// build is bad, a build that does not start is worse.
 (function () {
 	var w = window.__diceWeb = window.__diceWeb || {x: 0, y: 0, z: 0, live: 0, audio: 0};
 	w.ctxs = w.ctxs || [];
+	w.state = 'none';
 
 	// Record every AudioContext the page makes, Godot's included. Reflect.construct
 	// returns a genuine instance, so `ctx instanceof AudioContext` still holds and
@@ -43,6 +48,30 @@
 		}
 	} catch (err) {}
 
+	function stuck() {
+		for (var i = 0; i < w.ctxs.length; i++) {
+			if (w.ctxs[i].state !== 'running') { return true; }
+		}
+		return w.ctxs.length === 0;
+	}
+
+	function noteState() {
+		w.state = w.ctxs.length ? w.ctxs[0].state : 'none';
+		w.audio = (w.ctxs.length && !stuck()) ? 1 : 0;
+	}
+
+	function resumeAll() {
+		for (var i = 0; i < w.ctxs.length; i++) {
+			try {
+				var ctx = w.ctxs[i];
+				if (ctx.state !== 'running' && ctx.resume) {
+					ctx.resume().then(noteState).catch(function () {});
+				}
+			} catch (err) {}
+		}
+		noteState();
+	}
+
 	function bindMotion() {
 		window.addEventListener('devicemotion', function (e) {
 			var a = e.accelerationIncludingGravity || e.acceleration;
@@ -54,34 +83,84 @@
 		});
 	}
 
-	function onGesture() {
+	function askMotion() {
 		try {
-			for (var i = 0; i < w.ctxs.length; i++) {
-				if (w.ctxs[i].state === 'suspended') { w.ctxs[i].resume(); }
-			}
-			// Only claim success once there is something to have succeeded on.
-			if (w.ctxs.length) { w.audio = 1; }
-		} catch (err) {}
-
-		try {
-			if (!w.motionAsked) {
-				w.motionAsked = 1;
-				if (typeof DeviceMotionEvent !== 'undefined' &&
-						typeof DeviceMotionEvent.requestPermission === 'function') {
-					DeviceMotionEvent.requestPermission().then(function (state) {
-						if (state === 'granted') { bindMotion(); }
-					}).catch(function () {});
-				} else {
-					bindMotion();
-				}
+			if (w.motionAsked) { return; }
+			w.motionAsked = 1;
+			if (typeof DeviceMotionEvent !== 'undefined' &&
+					typeof DeviceMotionEvent.requestPermission === 'function') {
+				DeviceMotionEvent.requestPermission().then(function (state) {
+					if (state === 'granted') { bindMotion(); }
+				}).catch(function () {});
+			} else {
+				bindMotion();
 			}
 		} catch (err) {}
 	}
 
-	// Not `once`: the context can be created after the first gesture, and a page that
-	// has been backgrounded can have it suspended again on return.
+	// The button. Built once, shown only while the context is stuck.
+	var prompt = null;
+	function ensurePrompt() {
+		if (prompt || !document.body) { return; }
+		prompt = document.createElement('button');
+		prompt.type = 'button';
+		prompt.textContent = 'Enable sound';
+		prompt.setAttribute('aria-label', 'Enable sound');
+		prompt.style.cssText = [
+			'position:fixed', 'z-index:2147483647', 'top:12px', 'left:50%',
+			'transform:translateX(-50%)', 'padding:9px 18px',
+			'font:600 15px/1 system-ui,-apple-system,Segoe UI,sans-serif',
+			'color:#e6e8f2', 'background:#202536', 'border:2px solid #77819b',
+			'border-radius:9px', 'cursor:pointer', 'display:none'
+		].join(';');
+		prompt.addEventListener('click', function (e) {
+			e.stopPropagation();
+			resumeAll();
+			askMotion();
+			// Give resume() a moment to settle before deciding whether it worked.
+			setTimeout(refresh, 250);
+		});
+		document.body.appendChild(prompt);
+	}
+
+	// How long a context has to stay stuck before the button is worth showing. Almost
+	// every browser starts suspended and clears on the first click, so offering the
+	// button immediately would flash it at everyone for no reason. This waits to see
+	// whether the ordinary path works first.
+	var STUCK_GRACE_MS = 1500;
+	var stuckSince = 0;
+
+	function refresh() {
+		noteState();
+		ensurePrompt();
+		if (!prompt) { return; }
+		// Nothing to offer before Godot has made its context, and nothing to fix once it
+		// is running.
+		var bad = w.ctxs.length > 0 && stuck();
+		if (!bad) {
+			stuckSince = 0;
+			prompt.style.display = 'none';
+			return;
+		}
+		if (!stuckSince) { stuckSince = Date.now(); }
+		prompt.style.display =
+			(Date.now() - stuckSince >= STUCK_GRACE_MS) ? 'block' : 'none';
+	}
+
+	// The cheap path first: if a plain gesture is enough, the button never appears.
 	['pointerdown', 'touchend', 'keydown', 'click'].forEach(function (name) {
-		window.addEventListener(name, onGesture, {passive: true});
+		window.addEventListener(name, function () {
+			resumeAll();
+			askMotion();
+			setTimeout(refresh, 100);
+		}, {passive: true});
 	});
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', refresh);
+	} else {
+		refresh();
+	}
+	setInterval(refresh, 1000);
 })();
 </script>

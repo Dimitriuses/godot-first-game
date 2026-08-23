@@ -525,6 +525,13 @@ why. Do not rebuild it without reading that first.
   draws its speaker with `DrawRect`, `DrawColoredPolygon` and `DrawArc` in a 24-unit square
   scaled to the button, which renders identically everywhere and does not depend on a font
   at all. The arrows already in use (`◀ ▶ ×`) are safe; anything past that is not.
+- **Every control in this game is drawn inside the canvas, and in a browser that has a
+  cost.** A click on the mute button is a canvas event, not a page event, so the page
+  never accumulates the user activation the browser's audio API insists on — the web
+  build was silent, and both the game's own `resume()` and Godot's were refused every
+  time. Anything that needs a *browser* gesture rather than a *game* one needs a real DOM
+  element to be clicked; `web/head_include.html` grows one on demand. Nothing in the C#
+  tree is affected, and nothing outside a browser is.
 - **Muting mutes the bus, not the calls.** `AudioServer.SetBusMute` leaves the voice pool
   allocating and recycling exactly as it does when audible, so unmuting cannot land in a
   state the mixer has not been keeping up to date, and a sound already sounding stops

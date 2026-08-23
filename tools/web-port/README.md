@@ -153,6 +153,40 @@ browser. It cannot produce one — see below — so that is for an artifact down
 CI. Plain `http.server` is enough because the build is single-threaded and so needs no
 COOP/COEP headers, which is the same property that lets it work on Pages at all.
 
+## The page's own JavaScript
+
+`web/head_include.html` is folded into the exported page's `<head>` by `assemble.py`. It
+does two things Godot's web platform does not: unblocks the `AudioContext`, and feeds the
+accelerometer from `devicemotion`.
+
+**It has to be in the head, and that took two deploys to learn.** Godot creates its
+`AudioContext` while the WebAssembly module starts up. The first version of this lived in
+`web_platform.gd` and ran from `GameManager._ready` — by then the context already existed
+and a constructor patch could never see it. The console said exactly that and nothing
+more:
+
+```
+web platform glue: installed=true motion=false audio_unlocked=not yet
+```
+
+**Catching the context was not enough either.** With the patch in the head the context was
+found (`contexts=1`) and still would not resume: this code's `resume()` and *Godot's own*
+were both refused, every time, and the block message came from both call sites at once.
+Every control in this game is drawn **inside the canvas**, so every click is a canvas
+event that Godot handles and consumes, and the page never accumulates the activation the
+audio API wants. The fix is a real DOM button, above the canvas, that appears only if a
+context stays stuck for more than a moment and removes itself as soon as sound works.
+
+```sh
+node tools/web-port/head_include_check.js
+```
+
+`check.py` runs that, and skips with a warning if node is missing. **It is the only check
+that can see this file at all** — it runs before the engine exists, so no Godot harness
+can reach it, and it was shipped on reading alone twice and wrong both times. The stub DOM
+asserts what actually failed: that a context created after the patch is captured, that a
+suspended one reports as blocked, and that a gesture moves it to `running`.
+
 ## The export, and why it is CI's
 
 `.github/workflows/web.yml` installs the **standard** engine and its web export

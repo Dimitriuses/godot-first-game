@@ -103,6 +103,35 @@ def parse_check(godot):
     return failed
 
 
+def head_include_check():
+    """Drive `web/head_include.html` under node. Returns non-zero on failure.
+
+    It is the one part of the build no Godot harness can reach: it runs in the page
+    before the engine starts and talks to browser APIs Godot does not expose. Without
+    this it was shipped on reading alone, twice, and was wrong both times — first
+    installed too late to see Godot's AudioContext, then unable to get a gesture because
+    every control in this game is drawn inside the canvas.
+
+    Skipped with a warning if node is missing rather than failing the run: it is a
+    genuine gap in coverage, but making it fatal would stop anyone without node from
+    checking the rest.
+    """
+    script = os.path.join(HERE, "head_include_check.js")
+    if not os.path.exists(script):
+        return 0
+    print("\n--- head include (node) ---")
+    try:
+        result = subprocess.run(["node", script], capture_output=True, text=True)
+    except FileNotFoundError:
+        print("  SKIPPED — node is not installed, so the page's own JavaScript is")
+        print("            unchecked. CI has node and does run it.")
+        return 0
+    print(result.stdout.rstrip())
+    if result.returncode != 0:
+        print(result.stderr.rstrip())
+    return result.returncode
+
+
 def serve():
     """Serve an exported build for a look in a real browser.
 
@@ -160,6 +189,9 @@ def main():
         print("imported clean")
 
     if parse_check(godot):
+        return 1
+
+    if head_include_check():
         return 1
 
     checks = harnesses()

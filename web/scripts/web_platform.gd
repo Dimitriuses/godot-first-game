@@ -52,6 +52,7 @@ func _process(_delta: float) -> void:
 	motion_live = int(_state.live) == 1
 	if motion_live:
 		acceleration = Vector3(float(_state.x), float(_state.y), float(_state.z))
+	_report_audio_changes()
 
 
 ## What the board should feed its ShakeGesture: the browser's samples where there are
@@ -64,15 +65,39 @@ func read_accelerometer() -> Vector3:
 
 
 ## A line for the browser console, so a build that misbehaves can be diagnosed without a
-## rebuild. Printed once, from GameManager, and harmless anywhere else.
+## rebuild. Printed once at startup, and again whenever the audio state changes.
 ##
-## `audio` turns 1 on the first gesture that finds a context to resume, so "not yet" at
-## startup is expected and only means something once the page has been clicked.
+## **`state` is the field that matters**, and it was missing from the first version of
+## this line — which cost a deploy. `contexts=1 audio_unlocked=not yet` said the context
+## had been found and not resumed, but not *why*, and "suspended" against "running" is
+## the whole diagnosis.
 func describe() -> String:
 	if not is_web():
 		return "web platform glue: not a web build, nothing installed"
 	if _state == null:
 		return "web platform glue: MISSING — head_include.html is not in the export"
-	return ("web platform glue: contexts=%d audio_unlocked=%s motion=%s buses=%d"
-		% [int(_state.ctxs.length), "yes" if int(_state.audio) == 1 else "not yet",
+	return ("web platform glue: contexts=%d state=%s audio=%s motion=%s buses=%d"
+		% [int(_state.ctxs.length), str(_state.state),
+			"running" if int(_state.audio) == 1 else "blocked",
 			motion_live, AudioServer.bus_count])
+
+
+## Whether the browser is letting the game make a noise. False while the AudioContext is
+## suspended, which is silence no amount of Godot-side mixing can fix.
+func audio_running() -> bool:
+	return _state != null and int(_state.audio) == 1
+
+
+var _said := ""
+
+## Report a *change* in the audio state, once each. The first deploy's console showed the
+## block message dozens of times and the game's own view of it exactly once, which is the
+## wrong way round: the interesting event is the transition.
+func _report_audio_changes() -> void:
+	if _state == null:
+		return
+	var now := str(_state.state)
+	if now == _said:
+		return
+	_said = now
+	print("web platform glue: audio context is now '%s'" % now)
