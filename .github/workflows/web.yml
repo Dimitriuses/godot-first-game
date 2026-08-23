@@ -1,0 +1,108 @@
+# Build the GDScript tree and publish it to GitHub Pages (ROADMAP 9c).
+#
+# The C# project is never built here. Godot cannot export C# to the web at all, which is
+# why web/ exists; this workflow installs the STANDARD engine, assembles the scratch
+# project from web/ plus the shared assets and rewritten scenes, gates on the same
+# harnesses that tools/web-port/check.py runs locally, and only then exports.
+#
+# The gate is a gate. A web demo that is stale or broken is worse than none, so a failing
+# harness fails the build rather than warning — see ROADMAP 9d.
+
+name: web
+
+# Manual only, until the port is complete. The board cannot load without
+# game_manager.gd, so a push-triggered build would either fail at the gate or publish a
+# demo that does not run — and a broken demo is worse than none (ROADMAP 9d). Restore
+# `push: branches: [main]` once the port is playable; the gate below is what makes that
+# safe to do.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; never cancel one in flight, or Pages can be left half-updated.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.4.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache the engine and its export templates
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-standard
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} (standard, not .NET)
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot "$HOME/.local/share/godot/export_templates"
+
+          curl -fsSL -o /tmp/godot.zip \
+            "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          chmod +x ~/godot/godot
+
+          # The templates are what a local machine usually lacks; CI fetches its own,
+          # which is the reason the export is proved here rather than on a workstation.
+          curl -fsSL -o /tmp/templates.tpz \
+            "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates \
+            "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+
+      - name: Check the port
+        env:
+          GODOT_STANDARD: /home/runner/godot/godot
+        run: python tools/web-port/check.py
+
+      - name: Export
+        env:
+          GODOT_STANDARD: /home/runner/godot/godot
+        run: |
+          set -euo pipefail
+          mkdir -p build/web
+          # --import first: the export needs the resources imported, and check.py has
+          # already done it, but a cache miss on build/ would leave nothing to export.
+          "$GODOT_STANDARD" --headless --path build/web-project --import
+          "$GODOT_STANDARD" --headless --path build/web-project \
+            --export-release "Web" "$GITHUB_WORKSPACE/build/web/index.html"
+          test -s build/web/index.html
+          test -s build/web/index.wasm
+          echo "--- exported ---"
+          du -sh build/web
+          ls -la build/web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

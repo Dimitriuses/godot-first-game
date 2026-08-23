@@ -83,6 +83,13 @@ def main():
     shutil.copy2(os.path.join(WEB, "project.godot"), os.path.join(out, "project.godot"))
     print("%-16s%s" % ("project.godot", "from web/"))
 
+    # The export preset has to live inside the project it exports, so it is assembled in
+    # rather than pointed at. CI overrides the output path on the command line.
+    preset = os.path.join(WEB, "export_presets.cfg")
+    if os.path.exists(preset):
+        shutil.copy2(preset, os.path.join(out, "export_presets.cfg"))
+        print("%-16s%s" % ("export_presets.cfg", "from web/"))
+
     os.makedirs(os.path.join(out, "scripts"), exist_ok=True)
     for name in scripts:
         shutil.copy2(os.path.join(WEB, "scripts", name),

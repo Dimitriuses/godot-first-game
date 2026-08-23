@@ -754,10 +754,11 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 entry was written, and it grew again between the estimate and the start, exactly as the
 warning below said it would. `Player.cs` has since been deleted (item 3).
 
-**Progress, August 2026.** The tooling in 9b is built and the first three scripts are
-ported: `dice.gd`, `dice_theme.gd` and `sfx.gd`, with `dice.gd` passing 14 checks whose
-numbers match the C# tree exactly. `GameManager.cs` (1,531 lines) and the four UI scripts
-are not started. See [tools/web-port/README.md](tools/web-port/README.md), which carries
+**Progress, August 2026.** 9b's tooling is built, 9c's workflow is written, and **nine of
+the twelve scripts are ported — 1,781 of 4,465 lines**, with `dice.gd` passing 14 checks
+whose numbers match the C# tree exactly. `dice_palette.gd`, `dice_hud.gd` and
+`game_manager.gd` remain; the last cannot be written before the other two, because it
+references them by type. See [tools/web-port/README.md](tools/web-port/README.md), which carries
 the running state; what follows is the plan it is being measured against.
 
 The one part of the suggested order that has **not** been done is its first step —
