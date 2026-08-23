@@ -362,6 +362,12 @@ why. Do not rebuild it without reading that first.
   shake, and it holds a cooldown so one wobble is one throw. **Godot's web platform does
   not implement the sensor APIs**, so a browser build has to feed it from the DOM's
   `devicemotion` event through `JavaScriptBridge` — ROADMAP 9, not here.
+- **`InputEventScreenTouch.DoubleTap` is filled in by the platform, and the web platform
+  does not fill it in.** A double tap did nothing at all in the first browser build. The
+  flag is still honoured first — it is right wherever it is set — but `GameManager` now
+  also spots two presses within 400ms and 48px of each other, which works wherever
+  touches are reported. Anything else that leans on a platform-filled field is worth the
+  same suspicion.
 - **A double tap is what a touchscreen has instead of a right button.** `GameManager`
   reads `InputEventScreenTouch { DoubleTap: true }` and calls the same `OpenContextMenu`
   the right-click does, so all three menus — die, board, palette — come from one place.
@@ -496,6 +502,14 @@ why. Do not rebuild it without reading that first.
   at all. The departure is the mirror and **grows before it shrinks** — a die a few frames
   into leaving is *bigger* than full size, so "is it smaller yet" is the wrong question to
   ask of it.
+- **A browser's fallback font is smaller than the desktop one, so `◀ ▶ ×` are not safe
+  either.** This file used to say they were. The first GitHub Pages deploy drew the
+  palette's toggle as a blank box, and the die list's delete cross with it. Both are now
+  drawn — `UiSkin.IconChild` plus `DrawChevron` / `DrawCross` / `DrawFullscreen` — which
+  is the same answer the mute button already had. **Treat every non-ASCII character in a
+  `Text` as a font dependency.** And note what it cost beyond the picture: the toggle took
+  its *height* from the glyph it contained, so removing the text collapsed the button to
+  nothing until it was given explicit offsets.
 - **Godot's default font has no emoji, and a glyph it cannot render draws as a blank box.**
   So an icon made of a character — a speaker, a gear, an arrow beyond the handful that do
   exist — is a button that looks broken on some machines and fine on yours. `MuteButton`

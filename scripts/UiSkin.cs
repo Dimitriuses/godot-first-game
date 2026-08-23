@@ -1,4 +1,5 @@
 using Godot;
+using System;
 
 /// <summary>
 /// The look and the placement of the small square buttons in the top-right corner, in one
@@ -63,5 +64,67 @@ public static class UiSkin
 	{
 		float unit = icon.Size.X / 24f;
 		return (unit, new Vector2(0f, (icon.Size.Y - 24f * unit) / 2f));
+	}
+
+	/// <summary>
+	/// A drawing child filling its parent, for a button whose picture is drawn rather
+	/// than typed.
+	///
+	/// **Every glyph is a font dependency, and the web build is where that bites.** The
+	/// note elsewhere that `◀ ▶ ×` were safe was true of the desktop font and wrong of
+	/// the browser: the first GitHub Pages deploy drew the palette's toggle as a blank
+	/// box. Godot's fallback font in a web export carries a much smaller set than the
+	/// desktop one, so anything past ASCII is a gamble that is not worth taking twice.
+	/// </summary>
+	public static Control IconChild(Control parent, string name, Action<Control> draw)
+	{
+		var icon = new Control
+		{
+			Name = name,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		icon.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		icon.Draw += () => draw(icon);
+		parent.AddChild(icon);
+		return icon;
+	}
+
+	/// A solid triangle pointing left or right — the palette's open/close arrow.
+	public static void DrawChevron(Control icon, bool pointsRight, Color tint)
+	{
+		(float unit, Vector2 origin) = IconFrame(icon);
+		Vector2 P(float x, float y) => origin + new Vector2(x, y) * unit;
+		icon.DrawColoredPolygon(pointsRight
+			? new[] { P(9f, 5f), P(16f, 12f), P(9f, 19f) }
+			: new[] { P(15f, 5f), P(8f, 12f), P(15f, 19f) }, tint);
+	}
+
+	/// A cross — the die list's delete button.
+	public static void DrawCross(Control icon, Color tint)
+	{
+		(float unit, Vector2 origin) = IconFrame(icon);
+		Vector2 P(float x, float y) => origin + new Vector2(x, y) * unit;
+		float w = 2.2f * unit;
+		icon.DrawLine(P(7f, 7f), P(17f, 17f), tint, w, true);
+		icon.DrawLine(P(17f, 7f), P(7f, 17f), tint, w, true);
+	}
+
+	/// Four corner brackets, opening outward to go full screen and inward to come back.
+	public static void DrawFullscreen(Control icon, bool exit, Color tint)
+	{
+		(float unit, Vector2 origin) = IconFrame(icon);
+		Vector2 P(float x, float y) => origin + new Vector2(x, y) * unit;
+		float w = 2f * unit;
+		// One bracket, mirrored into all four corners. `exit` flips which way the arms
+		// point, so the button says what it will do rather than what state it is in.
+		foreach ((float cx, float cy, float sx, float sy) in new[]
+			{ (5f, 5f, 1f, 1f), (19f, 5f, -1f, 1f),
+			  (5f, 19f, 1f, -1f), (19f, 19f, -1f, -1f) })
+		{
+			float arm = exit ? -4.5f : 4.5f;
+			Vector2 corner = P(cx - (exit ? sx * 4.5f : 0f), cy - (exit ? sy * 4.5f : 0f));
+			icon.DrawLine(corner, corner + new Vector2(sx * arm, 0f) * unit, tint, w);
+			icon.DrawLine(corner, corner + new Vector2(0f, sy * arm) * unit, tint, w);
+		}
 	}
 }

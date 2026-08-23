@@ -564,11 +564,13 @@ func _build_row(entry: DieEntry) -> void:
 	# the list were louder than the numbers they sat beside.
 	entry.remove = Button.new()
 	entry.remove.name = "DieRemove"
-	entry.remove.text = "×"
 	entry.remove.custom_minimum_size = Vector2(24, 24)
 	entry.remove.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	entry.remove.focus_mode = Control.FOCUS_NONE
 	entry.remove.modulate = Color(1, 1, 1, 0)
+	# Drawn rather than typed, for the same reason the palette's arrow is: "×" came out
+	# as a blank box in the browser.
+	UiSkin.icon_child(entry.remove, "Icon", _draw_remove_icon)
 	entry.remove.pressed.connect(_on_remove_pressed.bind(entry))
 	row.add_child(entry.remove)
 
@@ -577,6 +579,10 @@ func _build_row(entry: DieEntry) -> void:
 	tween.tween_property(entry.wrapper, "custom_minimum_size",
 		Vector2(0, ROW_HEIGHT), ROW_FADE).from(Vector2.ZERO)
 	tween.tween_property(entry.wrapper, "modulate:a", 1.0, ROW_FADE)
+
+
+func _draw_remove_icon(icon: Control) -> void:
+	UiSkin.draw_cross(icon, Color("e6e8f2"))
 
 
 func _on_remove_pressed(entry: DieEntry) -> void:

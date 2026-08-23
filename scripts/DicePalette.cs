@@ -42,8 +42,12 @@ public partial class DicePalette : Control
 	/// How far below the top edge the drawer floats.
 	private const float DrawerTop = 8f;
 
+	/// The open/close tab beside it, square so its drawn arrow has a frame to sit in.
+	private const float ToggleSize = 40f;
+
 	private PanelContainer drawer;
 	private Button toggleButton;
+	private Control toggleIcon;
 	private TextureRect dragPreview;
 	private PanelContainer nameTag;
 	private Label nameTagLabel;
@@ -178,14 +182,23 @@ public partial class DicePalette : Control
 		toggleButton = new Button
 		{
 			Name = "Toggle",
-			Text = "▶",
 			TooltipText = "Open dice menu",
 			MouseFilter = MouseFilterEnum.Stop,
 			FocusMode = FocusModeEnum.None
 		};
 		toggleButton.SetAnchorsPreset(LayoutPreset.TopLeft);
+		// Sized explicitly. It used to take its height from the "▶" it had in it, so
+		// replacing that with a drawing collapsed the button to nothing — the arrow was
+		// load-bearing in a way that had nothing to do with what it looked like.
+		toggleButton.OffsetTop = DrawerTop;
+		toggleButton.OffsetBottom = DrawerTop + ToggleSize;
+		toggleButton.CustomMinimumSize = new Vector2(ToggleSize, ToggleSize);
 		toggleButton.Pressed += () => SetDrawerOpen(!isOpen, true);
 		AddChild(toggleButton);
+		// Drawn, not typed. This was "▶" until the first web deploy showed it as a blank
+		// box: the browser's fallback font has far fewer glyphs than the desktop one.
+		toggleIcon = UiSkin.IconChild(toggleButton, "Icon",
+			icon => UiSkin.DrawChevron(icon, !isOpen, new Color("e6e8f2")));
 
 		// Added last so it draws over the drawer, and ignores the mouse so pointing at a
 		// button cannot put the tag between the pointer and the button it describes.
@@ -427,7 +440,7 @@ public partial class DicePalette : Control
 		float panelLeft = open ? DrawerLeft : -DrawerWidth;
 		float panelRight = open ? DrawerLeft + DrawerWidth : 0f;
 		float toggleLeft = open ? DrawerLeft + DrawerWidth + 8f : 8f;
-		float toggleRight = open ? DrawerLeft + DrawerWidth + 48f : 48f;
+		float toggleRight = toggleLeft + ToggleSize;
 
 		drawerTween?.Kill();
 		if (animate)
@@ -447,7 +460,7 @@ public partial class DicePalette : Control
 			toggleButton.OffsetRight = toggleRight;
 		}
 
-		toggleButton.Text = open ? "◀" : "▶";
+		toggleIcon?.QueueRedraw();
 		toggleButton.TooltipText = open ? "Close dice menu" : "Open dice menu";
 	}
 }

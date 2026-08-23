@@ -91,6 +91,7 @@ var _dice_menu: DiceMenu
 var _palette: DicePalette
 var _mute_button: MuteButton
 var _group_drag_button: GroupDragButton
+var _fullscreen_button: FullscreenButton
 
 ## Whether a drag takes every die, as holding Shift does. A toggle rather than a modifier
 ## because a touchscreen has no modifiers to hold.
@@ -100,6 +101,12 @@ var _group_drag := false
 ## desktop and in a browser, so feed() is never reached and this costs nothing there.
 ## ROADMAP 9b-touch is what would feed it from the DOM in a browser build.
 var _shake_gesture := ShakeGesture.new()
+
+## The browser-shaped holes in Godot, filled from the DOM: the accelerometer, which the
+## web platform does not implement at all, and the audio context, which a browser will
+## not start outside a user gesture. Inert off the web. This node has no counterpart in
+## the C# tree and cannot have one — see web_platform.gd.
+var _web: WebPlatform
 var _ui_layer: CanvasLayer
 
 ## A copy waiting to be put down: the die type taken, the face it was showing, and the
@@ -116,6 +123,14 @@ var _swallow_next_die_click := false
 ## Set when a double tap has just opened a menu, so the emulated mouse press that Godot
 ## generates from the same tap does not also act on it.
 var _swallow_next_press := false
+
+## When and where the last touch went down, for spotting a double tap on a platform that
+## does not report one. The window is generous — a thumb is not a mouse — and the distance
+## is what stops a quick tap-and-drag reading as a double.
+const DOUBLE_TAP_MS := 400
+const DOUBLE_TAP_SLOP := 48.0
+var _last_tap_ms := 0
+var _last_tap_at := Vector2.ZERO
 
 ## Seconds of shudder left, and the direction it runs along.
 var _shake_left := 0.0
@@ -150,6 +165,12 @@ func _ready() -> void:
 	_board_bounds = _compute_board_bounds()
 
 	_load_pack()
+
+	# Before Sfx, so the audio context is being unlocked by the time anything asks to
+	# make a noise.
+	_web = WebPlatform.new()
+	_web.name = "WebPlatform"
+	add_child(_web)
 
 	# Before the panels, so anything that makes a noise while building has somewhere to
 	# send it.
@@ -186,6 +207,13 @@ func _ready() -> void:
 	_group_drag_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_group_drag_button.group_toggled.connect(_on_group_drag_toggled)
 
+	# Slot 2. This is the tree where it matters: the game is a canvas among page
+	# furniture, and the Fullscreen API is the only way out of that.
+	_fullscreen_button = FullscreenButton.new()
+	_fullscreen_button.name = "FullscreenButton"
+	_ui_layer.add_child(_fullscreen_button)
+	_fullscreen_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
 	_dice_menu = DiceMenu.new()
 	_dice_menu.name = "DiceMenu"
 	_ui_layer.add_child(_dice_menu)
@@ -212,6 +240,10 @@ func _ready() -> void:
 	# to be cleared away and the respawn anchor should not go with it.
 	if persist_board and SaveGame.exists():
 		_apply_save(SaveGame.load_board())
+
+	# One line to the browser console, so a build that misbehaves in a way no harness can
+	# reach can still be diagnosed from a phone without a rebuild.
+	print(_web.describe())
 
 	_update_processing()        # idle until a copy or a shake needs the frame
 
@@ -244,9 +276,10 @@ func _physics_process(delta: float) -> void:
 		_step_pending_spawns(delta)
 
 	# A phone being shaken is the space bar. Godot returns zero from the accelerometer on
-	# any platform without one, which is every platform this currently ships to — see the
-	# note in shake_gesture.gd about the browser.
-	var acceleration := Input.get_accelerometer()
+	# any platform without one — including the browser, which implements no sensor API at
+	# all — so on the web the samples come from the DOM instead. WebPlatform answers for
+	# both, and this line does not have to know which it got.
+	var acceleration := _web.read_accelerometer()
 	if acceleration != Vector3.ZERO and _shake_gesture.feed(acceleration, delta) \
 			and _dice.size() > 0:
 		throw_all_dice()
@@ -371,10 +404,20 @@ func _input(event: InputEvent) -> void:
 	# this reads the touch, and the flag stops the mouse copy from acting on the same tap.
 	if event is InputEventScreenTouch:
 		var tap := event as InputEventScreenTouch
-		if tap.pressed and tap.double_tap:
-			_open_context_menu(tap.position)
-			_swallow_next_press = true
-			get_viewport().set_input_as_handled()
+		if tap.pressed:
+			# `double_tap` is filled in by the platform, and not every platform fills it
+			# in: the first web build never reported one, so a double tap did nothing in
+			# a browser at all. Detecting it here as well costs two fields and works
+			# wherever touches are reported — and the platform's own flag is still
+			# honoured first, so nothing changes where it already worked.
+			var doubled := tap.double_tap or _is_second_tap(tap.position)
+			_last_tap_ms = Time.get_ticks_msec()
+			_last_tap_at = tap.position
+			if doubled:
+				_last_tap_ms = 0    # three taps are not two double taps
+				_open_context_menu(tap.position)
+				_swallow_next_press = true
+				get_viewport().set_input_as_handled()
 			return
 
 	if event is InputEventKey:
@@ -512,6 +555,12 @@ func _open_context_menu(point: Vector2) -> void:
 	else:
 		_dice_menu.open_board(point, _dice.size())
 	_swallow_next_die_click = true
+
+
+## Whether this touch lands soon enough after the last one, and close enough to it, to be
+## the second half of a double tap.
+func _is_second_tap(at: Vector2) -> bool:
+	return _last_tap_ms > 0 		and Time.get_ticks_msec() - _last_tap_ms <= DOUBLE_TAP_MS 		and at.distance_to(_last_tap_at) <= DOUBLE_TAP_SLOP
 
 
 ## The die under a point on the board, or null. Asked of the physics world rather than

@@ -41,6 +41,9 @@ const ICON_PADDING := 3
 ## How far below the top edge the drawer floats.
 const DRAWER_TOP := 8.0
 
+## The open/close tab beside it, square so its drawn arrow has a frame to sit in.
+const TOGGLE_SIZE := 40.0
+
 ## How big a die riding the cursor is drawn. Smaller than the 96 it used to be: it is a
 ## label saying what is coming, not a preview of its final size.
 const GHOST_SIZE := 56.0
@@ -49,6 +52,7 @@ const GHOST_GAP := 12.0
 
 var _drawer: PanelContainer
 var _toggle_button: Button
+var _toggle_icon: Control
 var _drag_preview: TextureRect
 var _name_tag: PanelContainer
 var _name_tag_label: Label
@@ -183,13 +187,21 @@ func _build_interface() -> void:
 
 	_toggle_button = Button.new()
 	_toggle_button.name = "Toggle"
-	_toggle_button.text = "▶"
 	_toggle_button.tooltip_text = "Open dice menu"
 	_toggle_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_toggle_button.focus_mode = Control.FOCUS_NONE
 	_toggle_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# Sized explicitly. It used to take its height from the "▶" it had in it, so replacing
+	# that with a drawing collapsed the button to nothing — the arrow was load-bearing in
+	# a way that had nothing to do with what it looked like.
+	_toggle_button.offset_top = DRAWER_TOP
+	_toggle_button.offset_bottom = DRAWER_TOP + TOGGLE_SIZE
+	_toggle_button.custom_minimum_size = Vector2(TOGGLE_SIZE, TOGGLE_SIZE)
 	_toggle_button.pressed.connect(_on_toggle_pressed)
 	add_child(_toggle_button)
+	# Drawn, not typed. This was "▶" until the first web deploy showed it as a blank box:
+	# the browser's fallback font has far fewer glyphs than the desktop one.
+	_toggle_icon = UiSkin.icon_child(_toggle_button, "Icon", _draw_toggle_icon)
 
 	# Added last so it draws over the drawer, and ignores the mouse so pointing at a
 	# button cannot put the tag between the pointer and the button it describes.
@@ -215,6 +227,10 @@ func _build_interface() -> void:
 	_name_tag.add_child(_name_tag_label)
 
 	_drawer.offset_bottom = DRAWER_TOP + _drawer.get_combined_minimum_size().y
+
+
+func _draw_toggle_icon(icon: Control) -> void:
+	UiSkin.draw_chevron(icon, not _is_open, Color("e6e8f2"))
 
 
 func _on_toggle_pressed() -> void:
@@ -422,7 +438,7 @@ func set_drawer_open(open: bool, animate: bool) -> void:
 	var panel_left := DRAWER_LEFT if open else -DRAWER_WIDTH
 	var panel_right := DRAWER_LEFT + DRAWER_WIDTH if open else 0.0
 	var toggle_left := DRAWER_LEFT + DRAWER_WIDTH + 8.0 if open else 8.0
-	var toggle_right := DRAWER_LEFT + DRAWER_WIDTH + 48.0 if open else 48.0
+	var toggle_right := toggle_left + TOGGLE_SIZE
 
 	if _drawer_tween != null:
 		_drawer_tween.kill()
@@ -439,5 +455,6 @@ func set_drawer_open(open: bool, animate: bool) -> void:
 		_toggle_button.offset_left = toggle_left
 		_toggle_button.offset_right = toggle_right
 
-	_toggle_button.text = "◀" if open else "▶"
+	if _toggle_icon != null:
+		_toggle_icon.queue_redraw()
 	_toggle_button.tooltip_text = "Close dice menu" if open else "Open dice menu"

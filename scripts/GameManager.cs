@@ -91,6 +91,7 @@ public partial class GameManager : Node2D
 	private DicePalette palette;
 	private MuteButton muteButton;
 	private GroupDragButton groupDragButton;
+	private FullscreenButton fullscreenButton;
 
 	/// Whether a drag takes every die, as holding Shift does. A toggle rather than a
 	/// modifier because a touchscreen has no modifiers to hold.
@@ -115,6 +116,14 @@ public partial class GameManager : Node2D
 	/// Set when a double tap has just opened a menu, so the emulated mouse press that
 	/// Godot generates from the same tap does not also act on it.
 	private bool swallowNextPress;
+
+	/// When and where the last touch went down, for spotting a double tap on a platform
+	/// that does not report one. The window is generous — a thumb is not a mouse — and
+	/// the distance is what stops a quick tap-and-drag reading as a double.
+	private const ulong DoubleTapMs = 400;
+	private const float DoubleTapSlop = 48f;
+	private ulong lastTapMs;
+	private Vector2 lastTapAt;
 
 	/// Seconds of shudder left, and the direction it runs along.
 	private float shakeLeft;
@@ -172,6 +181,14 @@ public partial class GameManager : Node2D
 		uiLayer.AddChild(groupDragButton);
 		groupDragButton.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		groupDragButton.Toggled += value => groupDrag = value;
+
+		// Slot 2. Only meaningful in a browser, where the game is a canvas among page
+		// furniture and the Fullscreen API is the only way out — but offered everywhere,
+		// because a control that appears on some platforms and not others is harder to
+		// explain than one that is always there.
+		fullscreenButton = new FullscreenButton { Name = "FullscreenButton" };
+		uiLayer.AddChild(fullscreenButton);
+		fullscreenButton.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		diceMenu = new DiceMenu { Name = "DiceMenu" };
 		uiLayer.AddChild(diceMenu);
@@ -364,11 +381,23 @@ public partial class GameManager : Node2D
 		// reports the touch itself and, with emulate_mouse_from_touch on, a mouse event
 		// alongside it — this reads the touch, and the flag stops the mouse copy from
 		// acting on the same tap.
-		if (@event is InputEventScreenTouch { Pressed: true, DoubleTap: true } tap)
+		if (@event is InputEventScreenTouch touch && touch.Pressed)
 		{
-			OpenContextMenu(tap.Position);
-			swallowNextPress = true;
-			GetViewport().SetInputAsHandled();
+			// `DoubleTap` is filled in by the platform, and not every platform fills it
+			// in: the first web build never reported one, so a double tap did nothing in
+			// a browser at all. Detecting it here as well costs two fields and works
+			// wherever touches are reported — and the platform's own flag is still
+			// honoured first, so nothing changes where it already worked.
+			bool doubled = touch.DoubleTap || IsSecondTap(touch.Position);
+			lastTapMs = Time.GetTicksMsec();
+			lastTapAt = touch.Position;
+			if (doubled)
+			{
+				lastTapMs = 0;      // three taps are not two double taps
+				OpenContextMenu(touch.Position);
+				swallowNextPress = true;
+				GetViewport().SetInputAsHandled();
+			}
 			return;
 		}
 
@@ -531,6 +560,12 @@ public partial class GameManager : Node2D
 			diceMenu.OpenBoard(point, dice.Count);
 		swallowNextDieClick = true;
 	}
+
+	/// Whether this touch lands soon enough after the last one, and close enough to it,
+	/// to be the second half of a double tap.
+	private bool IsSecondTap(Vector2 at) =>
+		lastTapMs > 0 && Time.GetTicksMsec() - lastTapMs <= DoubleTapMs
+			&& at.DistanceTo(lastTapAt) <= DoubleTapSlop;
 
 	/// The die under a point on the board, or null. Asked of the physics world rather
 	/// than waited for from the die itself, because picking reports after `_Input` has

@@ -73,14 +73,21 @@ def parse_check(godot):
     cache, so this is the check that actually means something. It costs about a second
     per script.
     """
-    scripts = sorted(n for n in os.listdir(os.path.join(ROOT, "web", "scripts"))
-                     if n.endswith(".gd"))
+    # The harnesses too, not just the port. A harness that does not parse still *exits
+    # zero*, so it was counted as a passing harness — which is the worst possible
+    # failure mode for a gate, and is exactly what happened to `input_check.gd`.
+    scripts = [("scripts", n) for n in
+               sorted(os.listdir(os.path.join(ROOT, "web", "scripts")))
+               if n.endswith(".gd")]
+    scripts += [("tests", n) for n in
+                sorted(os.listdir(os.path.join(ROOT, "web", "tests")))
+                if n.endswith(".gd")]
     print("\n--- parse (%d scripts) ---" % len(scripts))
     failed = 0
-    for name in scripts:
+    for folder, name in scripts:
         result = subprocess.run(
             [godot, "--headless", "--path", BUILD,
-             "--check-only", "--script", "res://scripts/%s" % name],
+             "--check-only", "--script", "res://%s/%s" % (folder, name)],
             capture_output=True, text=True)
         bad = [line for line in (result.stdout + result.stderr).splitlines()
                if "Parse Error" in line or "Failed to load script" in line]
@@ -172,8 +179,18 @@ def main():
         for line in output.splitlines():
             if line.startswith("  ") or "checks passed" in line or "FAILED" in line:
                 print(line)
-        if result.returncode != 0 or "FAIL" in output:
+        # A harness that printed no verdict has not passed — it has failed to run. Godot
+        # exits 0 after a script parse error, so the return code alone says nothing, and
+        # a silent harness was being counted as a green one.
+        if (result.returncode != 0 or "FAIL" in output
+                or "checks passed" not in output
+                or "SCRIPT ERROR" in output or "Parse Error" in output):
             failed.append(scene)
+            if "checks passed" not in output:
+                print("  (no verdict — the harness did not run to the end)")
+                for line in output.splitlines():
+                    if "ERROR" in line or "Parse" in line:
+                        print("        %s" % line.strip())
         print()
 
     if failed:

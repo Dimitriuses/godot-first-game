@@ -64,3 +64,68 @@ static func corner_button(parent: Control, name: String, slot: int) -> Button:
 static func icon_frame(icon: Control) -> Array:
 	var unit := icon.size.x / 24.0
 	return [unit, Vector2(0.0, (icon.size.y - 24.0 * unit) / 2.0)]
+
+
+## A drawing child filling its parent, for a button whose picture is drawn rather than
+## typed.
+##
+## **Every glyph is a font dependency, and this is the tree where that bites.** The note
+## elsewhere that `◀ ▶ ×` were safe was true of the desktop font and wrong of the browser:
+## the first GitHub Pages deploy drew the palette's toggle as a blank box. Godot's
+## fallback font in a web export carries a much smaller set than the desktop one, so
+## anything past ASCII is a gamble that is not worth taking twice.
+##
+## `draw` is called with the icon Control; it is bound rather than closed over because a
+## GDScript lambda captures by value at connect time.
+static func icon_child(parent: Control, name: String, draw: Callable) -> Control:
+	var icon := Control.new()
+	icon.name = name
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.draw.connect(draw.bind(icon))
+	parent.add_child(icon)
+	return icon
+
+
+static func _p(origin: Vector2, unit: float, x: float, y: float) -> Vector2:
+	return origin + Vector2(x, y) * unit
+
+
+## A solid triangle pointing left or right — the palette's open/close arrow.
+static func draw_chevron(icon: Control, points_right: bool, tint: Color) -> void:
+	var frame := icon_frame(icon)
+	var unit: float = frame[0]
+	var o: Vector2 = frame[1]
+	var points := PackedVector2Array([_p(o, unit, 9, 5), _p(o, unit, 16, 12),
+		_p(o, unit, 9, 19)]) if points_right \
+		else PackedVector2Array([_p(o, unit, 15, 5), _p(o, unit, 8, 12),
+			_p(o, unit, 15, 19)])
+	icon.draw_colored_polygon(points, tint)
+
+
+## A cross — the die list's delete button.
+static func draw_cross(icon: Control, tint: Color) -> void:
+	var frame := icon_frame(icon)
+	var unit: float = frame[0]
+	var o: Vector2 = frame[1]
+	var w := 2.2 * unit
+	icon.draw_line(_p(o, unit, 7, 7), _p(o, unit, 17, 17), tint, w, true)
+	icon.draw_line(_p(o, unit, 17, 7), _p(o, unit, 7, 17), tint, w, true)
+
+
+## Four corner brackets, opening outward to go full screen and inward to come back.
+static func draw_fullscreen(icon: Control, exit: bool, tint: Color) -> void:
+	var frame := icon_frame(icon)
+	var unit: float = frame[0]
+	var o: Vector2 = frame[1]
+	var w := 2.0 * unit
+	# One bracket, mirrored into all four corners. `exit` flips which way the arms point,
+	# so the button says what it will do rather than what state it is in.
+	for c in [[5.0, 5.0, 1.0, 1.0], [19.0, 5.0, -1.0, 1.0],
+			[5.0, 19.0, 1.0, -1.0], [19.0, 19.0, -1.0, -1.0]]:
+		var arm := -4.5 if exit else 4.5
+		var corner := _p(o, unit,
+			c[0] - (c[2] * 4.5 if exit else 0.0),
+			c[1] - (c[3] * 4.5 if exit else 0.0))
+		icon.draw_line(corner, corner + Vector2(c[2] * arm, 0.0) * unit, tint, w)
+		icon.draw_line(corner, corner + Vector2(0.0, c[3] * arm) * unit, tint, w)

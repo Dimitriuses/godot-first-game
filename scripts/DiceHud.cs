@@ -592,12 +592,15 @@ public partial class DiceHud : Control
 		entry.Remove = new Button
 		{
 			Name = "DieRemove",
-			Text = "×",
 			CustomMinimumSize = new Vector2(24, 24),
 			SizeFlagsVertical = SizeFlags.ShrinkCenter,
 			FocusMode = FocusModeEnum.None,
 			Modulate = new Color(1, 1, 1, 0)
 		};
+		// Drawn rather than typed, for the same reason the palette's arrow is: "×" came
+		// out as a blank box in the browser.
+		UiSkin.IconChild(entry.Remove, "Icon",
+			icon => UiSkin.DrawCross(icon, new Color("e6e8f2")));
 		entry.Remove.Pressed += () =>
 		{
 			// One row, one delete: on a pair the row stands for both dice, so the cross
