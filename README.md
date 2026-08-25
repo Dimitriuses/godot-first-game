@@ -145,7 +145,8 @@ Exporting a Windows binary uses the committed preset, which writes to `builds/`
 
 That indirection is not a preference. Godot's own documentation is blunt — *"Projects
 written in C# using Godot 4 currently cannot be exported to the web"* — and the editor
-refuses before it starts. So the 4,465 lines of C# were ported by hand into a second tree,
+refuses before it starts. So the C# gameplay — 4,704 lines across fourteen scripts — was ported by hand into a
+second tree,
 and **C# stays canonical**: `web/` is a derived artifact, and when the two disagree the C#
 one is right.
 

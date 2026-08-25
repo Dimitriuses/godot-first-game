@@ -728,8 +728,9 @@ web build.
 
 ### What it actually took
 
-**The port: 4,465 lines of C# across twelve scripts, by hand.** The estimate in 9a said
-4,160 and warned it would be wrong again by the time anyone started; it was. GDScript has
+**The port: 4,465 lines of C# across twelve scripts, by hand** — 4,704 across fourteen
+by the time the browser bugs were fixed, since two of the fixes added scripts. The
+estimate in 9a said 4,160 and warned it would be wrong again by the time anyone started; it was. GDScript has
 no method overloads, no tuples and no `HashSet`, and `load` is a built-in — each of those
 shows up in the notes at the head of the file it changed.
 
@@ -808,7 +809,7 @@ See [tools/theme-lab/README.md](tools/theme-lab/README.md).
 entry was written, and it grew again between the estimate and the start, exactly as the
 warning below said it would. `Player.cs` has since been deleted (item 3).
 
-**Done.** All twelve scripts are ported and the demo is live. See
+**Done.** Every script is ported and the demo is live. See
 [tools/web-port/README.md](tools/web-port/README.md), which carries the running state;
 what follows is the plan it was measured against.
 

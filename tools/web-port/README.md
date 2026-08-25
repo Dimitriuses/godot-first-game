@@ -91,7 +91,8 @@ a renamed C# export and a silently broken web build.
 
 ## Progress — the port is complete
 
-All twelve scripts are ported: **4,465 C# lines**, and `game.tscn` loads and runs in the
+Every script is ported — **4,704 C# lines across fourteen**, up from the 4,465 the port
+itself covered, because two of the browser fixes added scripts. `game.tscn` loads and runs in the
 GDScript tree. 29 checks pass across two harnesses.
 
 | | C# lines | |
@@ -105,7 +106,7 @@ GDScript tree. 29 checks pass across two harnesses.
 | `mute_button.gd` `dice_theme.gd` `save_game.gd` | 274 | |
 | `group_drag_button.gd` `shake_gesture.gd` `ui_skin.gd` | 220 | |
 
-Re-counted August 2026 at 4,465 across twelve scripts, against the 4,160 the ROADMAP
+Re-counted at the start of the port at 4,465 across twelve scripts, against the 4,160 the ROADMAP
 recorded — it grew again between the estimate and the start, exactly as that entry warned.
 
 Three things GDScript has not got, and how each was handled throughout:

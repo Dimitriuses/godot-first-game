@@ -306,34 +306,63 @@ one approach that silently does nothing.
   animation at 128px cells drawn at 1:1: 3.9 MB for the same on-screen result, and a CC0
   source into the bargain. See [docs/ASSETS.md](docs/ASSETS.md).
 
-## 7. Nothing is tested
+## 7. Half of it is tested — the half that ships to the browser
 
-**Still true: there is no test project, no committed test scene and no CI.** What changed in
-August 2026 is that there is now a *repeatable way* to test, and the argument for not
-bothering has weakened.
+This entry used to open *"there is no test project, no committed test scene and no CI"*.
+That was true when it was written and is **no longer true**, so here is the split as it
+actually stands:
 
-The old argument was that ~160 lines of engine glue with no pure logic is not worth pinning.
-The gameplay code is now **~4,160 lines across twelve scripts** and includes a real state
-machine (`Dice`: resting / held / rolling), a save format, an audio mixer and a shader — the
-kind of thing that breaks silently, and has, repeatedly.
+| | committed tests | CI |
+|---|---|---|
+| `web/` — the GDScript tree | **60 checks, 4 harnesses** | `.github/workflows/web.yml`, gating every deploy |
+| `scripts/` — the C# tree, which is canonical | **none** | none |
 
-The throwaway harnesses have earned their keep since: they are what caught the die list
-claiming deleted dice, the delete cross vanishing under the cursor, `body_entered` reporting
-post-impact velocity so every collision was inaudible, `SpawnDie` ignoring the theme it was
-handed, the copy's arrival animation being killed by `PlaceOnFace`, and dice spawning twelve
-pixels below the cursor. Every one of those was found by a harness that was then deleted.
+That is exactly backwards from where the value is, and it is worth being plain about why:
+the tests exist because the *web port* could not have been written without them, not
+because the project decided to start testing. C# stays canonical, and the canonical tree
+is the untested one.
 
-Godot runs headless and the .NET build runs C# in that mode, so a throwaway `Node` scene
-driven by `await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame)` can step the die
-through pickup, spin-up, release and landing and assert on `AnimatedSprite2D.Animation`,
-`.Frame` and `.IsPlaying()`. Twenty such checks verified the August 2026 dice rewrite; later
-features ran 8 to 34 apiece. Every harness was deleted afterwards rather than committed. The
-recipe, and the traps that cost a run each, are written up in [CLAUDE.md](CLAUDE.md).
+### What the web tree has
 
-Making that permanent is the cheapest real improvement available to this repository. Note
-that it is also a prerequisite for the web port (ROADMAP 9d): the C# tree and the GDScript
-tree will drift the moment either changes, and the harness is the only thing that could tell
-you they had.
+`python tools/web-port/check.py` assembles the GDScript project, parse-checks all 20
+scripts, and runs four harnesses against the real scenes: the die's state machine, the
+whole board coming up, the audio pool, and the input paths. `node
+tools/web-port/browser_check.mjs` then drives the published page in a real browser and
+fails if throwing the dice makes no sound. CI runs both — the first before exporting, the
+second after deploying.
+
+Two of those exist only because a gate lied. `check.py` originally parse-checked
+`web/scripts/` and not `web/tests/`, and a harness that fails to load still exits zero —
+so a harness with a syntax error in it counted as a passing harness, and ten checks were
+silently not running. The browser check exists because sixty green checks sat beside a
+silent game for three deploys: Godot ships `audio/general/default_playback_type.web` as
+Sample and everything else as Stream, so the broken path ran in a browser and nowhere
+else. **A gate that cannot fail is not a gate**, and a platform that behaves differently
+needs a test that runs on it.
+
+### What the C# tree has
+
+Throwaway harnesses, written for a change and deleted after it. The recipe and the traps
+are in [CLAUDE.md](CLAUDE.md).
+
+The old argument for that was ~160 lines of engine glue with no pure logic. The gameplay
+is now **4,704 lines across fourteen scripts** — a real state machine (`Dice`: resting /
+held / rolling), a save format, an audio mixer and a shader. The harnesses have earned
+their keep: they caught the die list claiming deleted dice, the delete cross vanishing
+under the cursor, `body_entered` reporting post-impact velocity so every collision was
+inaudible, `SpawnDie` ignoring the theme it was handed, the copy's arrival animation being
+killed by `PlaceOnFace`, and dice spawning twelve pixels below the cursor. Twenty checks
+verified the August 2026 dice rewrite; later features ran 8 to 34 apiece. Every one was
+deleted afterwards.
+
+### What is still missing
+
+**The parity gate ROADMAP 9d actually asked for.** The two trees are checked separately,
+not against each other: nothing renders `docs/screenshot.png` from both and diffs them,
+and nothing runs equivalent assertions on both and requires identical output. So a change
+to the C# tree that nobody mirrors into `web/` passes everything and quietly leaves the
+demo stale. That is the cheapest real improvement left in this repository, and it is the
+one the web port was supposed to force and did not.
 
 ---
 
